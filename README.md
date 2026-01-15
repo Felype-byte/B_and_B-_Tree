@@ -5,12 +5,12 @@ Sistema interativo de visualização e aprendizado sobre Árvores B e B+ com int
 ## 📋 Características
 
 - ✅ **Árvore B** completa com fanout configurável (3-10)
-- 🔍 **Busca e Inserção** com rastreamento detalhado
+- ✅ **Árvore B+** completa com encadeamento de folhas
+- 🔍 **Busca, Inserção e Remoção** com rastreamento detalhado
 - 📊 **Visualização passo a passo** de cada operação
 - 📈 **Métricas de desempenho**: acessos a nós e tempo de execução
-- 🎲 **Inserções aleatórias** em lote para testes
+- 🎲 **Inserções e Remoções aleatórias** em lote para testes
 - ✔️ **Validação automática** de invariantes
-- 🚧 **Árvore B+** (planejada para Etapa 2)
 
 ## 🚀 Instalação
 
@@ -86,7 +86,9 @@ Isso executará uma bateria de testes que verificam:
 3. O sistema mostrará o caminho percorrido e se a chave foi encontrada
 
 **Remover:**
-- Esta operação será implementada em etapa futura
+1. Digite uma chave no campo "Chave"
+2. Clique em "Remover"
+3. A operação será rastreada mostrando a busca e a remoção (incluindo merges e redistribuição)
 
 ### 3. Inserção Aleatória em Lote
 
@@ -224,19 +226,19 @@ O sistema valida automaticamente:
    - Intervalo pequeno (1-100): mais colisões
    - Intervalo grande (1-100000): menos colisões
 
-## 🚧 Próximas Etapas
+## ✅ Etapas Concluídas
 
 ### Etapa 2: Árvore B+
-- [ ] Implementar estrutura B+ com encadeamento de folhas
-- [ ] Operações de busca e inserção
-- [ ] Varredura sequencial
-- [ ] Range queries
+- [x] Implementar estrutura B+ com encadeamento de folhas
+- [x] Operações de busca e inserção
+- [x] Varredura sequencial (visualizada via links)
+- [x] Range queries
 
 ### Etapa 3: Remoção
-- [ ] Operação de remoção para Árvore B
-- [ ] Operação de remoção para Árvore B+
-- [ ] Tratamento de underflow
-- [ ] Redistribuição e merge de nós
+- [x] Operação de remoção para Árvore B
+- [x] Operação de remoção para Árvore B+
+- [x] Tratamento de underflow
+- [x] Redistribuição e merge de nós
 
 ## 📝 Critérios de Conclusão (Etapa 1)
 

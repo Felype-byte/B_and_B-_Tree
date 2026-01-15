@@ -8,8 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Callable, Optional
 import os
-from PIL import Image, ImageTk
-
+# from PIL import Image, ImageTk # Removed dependency on images for widgets
 
 class MainWindow:
     """
@@ -18,7 +17,7 @@ class MainWindow:
     
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Visualizador de Árvores B e B+ - Edição Floresta")
+        self.root.title("Visualizador de Árvores B e B+")
         self.root.geometry("1200x800")
         
         # Configurar Tema
@@ -37,20 +36,21 @@ class MainWindow:
         self.on_reset: Optional[Callable] = None
         self.on_play: Optional[Callable] = None
         
-        self.root.configure(bg="#2b1b17")
+        self.root.configure(bg="#121212")
         self._create_widgets()
 
     def _setup_theme(self):
-        """Configura o tema visual (Florestal)."""
+        """Configura o tema visual (Clean Modern)."""
         style = ttk.Style()
         style.theme_use('clam')
         
-        # Paleta
-        bg_dark = "#2b1b17"      # Madeira escura
-        bg_panel = "#3e2723"     # Painel madeira
-        fg_text = "#f1f8e9"      # Texto claro
-        btn_bg = "#558b2f"       # Verde folha botão
-        btn_active = "#689f38"   # Verde claro hover
+        # Paleta Modern Dark
+        bg_dark = "#121212"      # Fundo Principal
+        bg_panel = "#1e1e1e"     # Painéis
+        fg_text = "#e0e0e0"      # Texto Principal
+        accent_color = "#3700b3" # Roxo Profundo (Primary)
+        accent_light = "#6200ea" # Roxo Claro (Hover)
+        border_color = "#333333" # Bordas sutis
         
         # Configuração Geral
         style.configure(".", background=bg_dark, foreground=fg_text, font=("Segoe UI", 10))
@@ -60,25 +60,25 @@ class MainWindow:
         style.configure("Panel.TFrame", background=bg_panel)
         
         # Labelframes
-        style.configure("TLabelframe", background=bg_panel, foreground="#a1887f", bordercolor="#5d4037")
-        style.configure("TLabelframe.Label", background=bg_panel, foreground="#dcedc8", font=("Segoe UI", 11, "bold"))
+        style.configure("TLabelframe", background=bg_panel, foreground="#b0bec5", bordercolor=border_color)
+        style.configure("TLabelframe.Label", background=bg_panel, foreground="#81d4fa", font=("Segoe UI", 10, "bold"))
         
         # Labels
         style.configure("TLabel", background=bg_panel, foreground=fg_text)
-        style.configure("Title.TLabel", background=bg_panel, foreground="#a5d6a7", font=("Segoe UI", 16, "bold"))
+        style.configure("Title.TLabel", background=bg_panel, foreground="#ffffff", font=("Segoe UI", 16, "bold"))
         
-        # Botões (Estilo Folha)
+        # Botões (Flat Modern)
         style.configure("TButton", 
-            background=btn_bg, 
+            background=accent_color, 
             foreground="white", 
             borderwidth=0, 
             focuscolor="none",
-            padding=6,
+            padding=8,
             font=("Segoe UI", 9, "bold")
         )
         style.map("TButton",
-            background=[('active', btn_active), ('pressed', '#33691e')],
-            foreground=[('disabled', '#a1887f')]
+            background=[('active', accent_light), ('pressed', '#000000')],
+            foreground=[('disabled', '#555555')]
         )
         
         # Radiobuttons
@@ -86,14 +86,14 @@ class MainWindow:
         style.map("TRadiobutton", background=[('active', bg_panel)])
         
         # Entry
-        style.configure("TEntry", fieldbackground="#4e342e", foreground="white", insertcolor="white", bordercolor="#8d6e63")
+        style.configure("TEntry", fieldbackground="#2c2c2c", foreground="white", insertcolor="white", bordercolor=border_color)
         
         # Scale
-        style.configure("Horizontal.TScale", background=bg_panel, troughcolor="#4e342e", sliderthickness=20)
+        style.configure("Horizontal.TScale", background=bg_panel, troughcolor="#2c2c2c", sliderthickness=15)
         
         # Scrollbar
-        style.configure("Vertical.TScrollbar", background="#5d4037", troughcolor="#2b1b17", arrowcolor="#dcedc8")
-        style.configure("Horizontal.TScrollbar", background="#5d4037", troughcolor="#2b1b17", arrowcolor="#dcedc8")
+        style.configure("Vertical.TScrollbar", background="#2c2c2c", troughcolor="#121212", arrowcolor="#e0e0e0")
+        style.configure("Horizontal.TScrollbar", background="#2c2c2c", troughcolor="#121212", arrowcolor="#e0e0e0")
 
     def _create_widgets(self):
         """Cria todos os widgets da interface."""
@@ -109,31 +109,24 @@ class MainWindow:
         main_frame.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
         
         # === PAINEL DE CONTROLES (ESQUERDA) ===
-        # Container com Scrollbar para os controles
-        left_container = ttk.Frame(main_frame, width=350) # Removido estilo para ser neutro
+        # Width levemente maior para conforto
+        left_container = ttk.Frame(main_frame, width=320)
         left_container.pack(side=tk.LEFT, fill=tk.Y)
         left_container.pack_propagate(False)
         
-        # Canvas para scroll dos controles E BACKGROUND DE PEDRA
-        self.ctrl_canvas = tk.Canvas(left_container, bg="#3e2723", highlightthickness=0, width=320)
+        # Canvas para scroll dos controles
+        self.ctrl_canvas = tk.Canvas(left_container, bg="#1e1e1e", highlightthickness=0, width=320)
         ctrl_scrollbar = ttk.Scrollbar(left_container, orient="vertical", command=self.ctrl_canvas.yview)
         
-        # Opção de background removida a pedido do usuário (ficou melhor clean)
-        # self.bg_sidebar_ref = ...
-
-        # Frame interno que vai conter os widgets
-        # Nota: Tkinter frames padrões não suportam transparência real. 
-        # Vamos tentar usar estilo minimalista ou aceitar que os frames terão fundo.
-        # Mas o usuário pediu "fundo de pedra".
-        ctrl_inner = ttk.Frame(self.ctrl_canvas, style="Panel.TFrame") # Mantendo fundo madeira por enquanto para legibilidade
+        ctrl_inner = ttk.Frame(self.ctrl_canvas, style="Panel.TFrame")
         
         # Configurar scroll
         ctrl_inner.bind(
             "<Configure>",
             lambda e: self.ctrl_canvas.configure(scrollregion=self.ctrl_canvas.bbox("all"))
         )
-        # Centralizar frame interno no canvas para ver a pedra nas bordas?
-        self.ctrl_canvas.create_window((15, 15), window=ctrl_inner, anchor="nw", width=300) 
+        
+        self.ctrl_canvas.create_window((0, 0), window=ctrl_inner, anchor="nw", width=320) 
         self.ctrl_canvas.configure(yscrollcommand=ctrl_scrollbar.set)
         
         # Pack do scroll
@@ -142,19 +135,19 @@ class MainWindow:
         
         # Padding interno
         pad_frame = ttk.Frame(ctrl_inner, style="Panel.TFrame")
-        pad_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        pad_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
         # Título
         title_label = ttk.Label(
             pad_frame,
-            text="🌿 Floresta B-Tree",
+            text="B-Tree Viz",
             style="Title.TLabel"
         )
-        title_label.pack(pady=(0, 20))
+        title_label.pack(pady=(0, 25), anchor="w")
         
         # --- Seleção de tipo de árvore ---
-        tree_type_frame = ttk.LabelFrame(pad_frame, text="Tipo de Árvore", padding=10)
-        tree_type_frame.pack(fill=tk.X, pady=5)
+        tree_type_frame = ttk.LabelFrame(pad_frame, text=" Estrutura ", padding=15)
+        tree_type_frame.pack(fill=tk.X, pady=10)
         
         self.tree_type_var = tk.StringVar(value="btree")
         ttk.Radiobutton(
@@ -163,7 +156,7 @@ class MainWindow:
             variable=self.tree_type_var,
             value="btree",
             command=self._on_tree_type_changed
-        ).pack(anchor=tk.W)
+        ).pack(anchor=tk.W, pady=2)
         
         ttk.Radiobutton(
             tree_type_frame,
@@ -171,16 +164,19 @@ class MainWindow:
             variable=self.tree_type_var,
             value="bplustree",
             command=self._on_tree_type_changed
-        ).pack(anchor=tk.W)
+        ).pack(anchor=tk.W, pady=2)
         
         # --- Configuração de Fanout ---
-        fanout_frame = ttk.LabelFrame(pad_frame, text="Fanout (Grau)", padding=10)
+        fanout_frame = ttk.LabelFrame(pad_frame, text=" Grau (Ordem) ", padding=15)
         fanout_frame.pack(fill=tk.X, pady=10)
         
         self.fanout_var = tk.IntVar(value=3)
         
-        fanout_label = ttk.Label(fanout_frame, text="n = 3", font=("Segoe UI", 12, "bold"))
-        fanout_label.pack()
+        fanout_header = ttk.Frame(fanout_frame, style="Panel.TFrame")
+        fanout_header.pack(fill=tk.X)
+        
+        fanout_label = ttk.Label(fanout_header, text="n = 3", font=("Segoe UI", 12))
+        fanout_label.pack(side=tk.LEFT)
         
         self.fanout_scale = ttk.Scale(
             fanout_frame,
@@ -190,127 +186,94 @@ class MainWindow:
             variable=self.fanout_var,
             command=lambda v: self._update_fanout_label(fanout_label, v)
         )
-        self.fanout_scale.pack(fill=tk.X, pady=5)
+        self.fanout_scale.pack(fill=tk.X, pady=(10, 10))
         
         ttk.Button(
             fanout_frame,
-            text="Aplicar & Reiniciar",
+            text="Aplicar Mudança",
             command=self._on_fanout_changed
-        ).pack(fill=tk.X, pady=5)
-        
-        # --- Tipo de Chave ---
-        key_type_frame = ttk.LabelFrame(pad_frame, text="Tipo de Chave", padding=10)
-        key_type_frame.pack(fill=tk.X, pady=5)
-        
-        self.key_type_var = tk.StringVar(value="numeric")
-        ttk.Radiobutton(
-            key_type_frame,
-            text="Numérico",
-            variable=self.key_type_var,
-            value="numeric"
-        ).pack(anchor=tk.W)
-        
-        ttk.Radiobutton(
-            key_type_frame,
-            text="String",
-            variable=self.key_type_var,
-            value="string"
-        ).pack(anchor=tk.W)
+        ).pack(fill=tk.X)
         
         # --- Operações ---
-        ops_frame = ttk.LabelFrame(pad_frame, text="Operações", padding=10)
-        ops_frame.pack(fill=tk.X, pady=5)
+        ops_frame = ttk.LabelFrame(pad_frame, text=" Operações ", padding=15)
+        ops_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Label(ops_frame, text="Chave:").pack(anchor=tk.W)
-        self.key_entry = ttk.Entry(ops_frame)
-        self.key_entry.pack(fill=tk.X, pady=5)
+        # Key Type hidden mostly, assume numeric for simplicity or keep valid
+        # Keeping it internal if needed, but UI cleaner without it if user uses nums usually.
+        # Adding simple type selection if robust.
+        self.key_type_var = tk.StringVar(value="numeric")
+
+        ttk.Label(ops_frame, text="Valor:").pack(anchor=tk.W)
+        self.key_entry = ttk.Entry(ops_frame, font=("Segoe UI", 11))
+        self.key_entry.pack(fill=tk.X, pady=(5, 15))
         
-        btn_frame = ttk.Frame(ops_frame, style="Panel.TFrame")
-        btn_frame.pack(fill=tk.X, pady=5)
+        # Grid layout for buttons
+        btn_grid = ttk.Frame(ops_frame, style="Panel.TFrame")
+        btn_grid.pack(fill=tk.X)
         
         ttk.Button(
-            btn_frame,
+            btn_grid,
             text="Inserir",
             command=self._on_insert_clicked
-        ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        ).pack(fill=tk.X, pady=2)
         
         ttk.Button(
-            btn_frame,
+            btn_grid,
             text="Buscar",
             command=self._on_search_clicked
-        ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        ).pack(fill=tk.X, pady=2)
         
         self.remove_btn = ttk.Button(
-            btn_frame,
+            btn_grid,
             text="Remover",
             command=self._on_remove_clicked
         )
-        self.remove_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
+        self.remove_btn.pack(fill=tk.X, pady=2)
         
-        # --- Inserção Aleatória (COMPLETO) ---
-        random_frame = ttk.LabelFrame(pad_frame, text="Inserção Aleatória", padding=10)
-        random_frame.pack(fill=tk.X, pady=5)
+        # --- Aleatório ---
+        random_frame = ttk.LabelFrame(pad_frame, text=" Aleatório ", padding=15)
+        random_frame.pack(fill=tk.X, pady=10)
         
-        rf_top = ttk.Frame(random_frame, style="Panel.TFrame")
-        rf_top.pack(fill=tk.X)
+        # Inputs Row
+        r_inputs = ttk.Frame(random_frame, style="Panel.TFrame")
+        r_inputs.pack(fill=tk.X, pady=(0, 10))
         
-        ttk.Label(rf_top, text="Qtd:").pack(side=tk.LEFT)
-        self.random_count_entry = ttk.Entry(rf_top, width=8)
+        ttk.Label(r_inputs, text="Qtd:").pack(side=tk.LEFT)
+        self.random_count_entry = ttk.Entry(r_inputs, width=5)
         self.random_count_entry.insert(0, "10")
         self.random_count_entry.pack(side=tk.LEFT, padx=5)
         
-        rf_mid = ttk.Frame(random_frame, style="Panel.TFrame")
-        rf_mid.pack(fill=tk.X, pady=5)
+        ttk.Label(r_inputs, text="Max:").pack(side=tk.LEFT, padx=(5,0))
+        self.random_max_entry = ttk.Entry(r_inputs, width=6)
+        self.random_max_entry.insert(0, "100") # Simplified max default
+        self.random_max_entry.pack(side=tk.LEFT, padx=5)
         
-        ttk.Label(rf_mid, text="Min:").pack(side=tk.LEFT)
-        self.random_min_entry = ttk.Entry(rf_mid, width=6)
+        # Inputs hidden for simplicity (Min usually 1)
+        self.random_min_entry = ttk.Entry(r_inputs, width=0)
         self.random_min_entry.insert(0, "1")
-        self.random_min_entry.pack(side=tk.LEFT, padx=2)
-        
-        ttk.Label(rf_mid, text="Max:").pack(side=tk.LEFT, padx=(5,0))
-        self.random_max_entry = ttk.Entry(rf_mid, width=6)
-        self.random_max_entry.insert(0, "1000")
-        self.random_max_entry.pack(side=tk.LEFT, padx=2)
         
         ttk.Button(
             random_frame,
-            text="Inserir Lote",
+            text="Gerar",
             command=self._on_random_insert_clicked
-        ).pack(fill=tk.X, pady=5)
-        
-        # --- Remoção Aleatória (COMPLETO) ---
-        remove_random_frame = ttk.LabelFrame(pad_frame, text="Remoção Aleatória", padding=10)
-        remove_random_frame.pack(fill=tk.X, pady=5)
-        
-        rr_top = ttk.Frame(remove_random_frame, style="Panel.TFrame")
-        rr_top.pack(fill=tk.X)
-        
-        ttk.Label(rr_top, text="Qtd:").pack(side=tk.LEFT)
-        self.remove_count_entry = ttk.Entry(rr_top, width=8)
-        self.remove_count_entry.insert(0, "5")
-        self.remove_count_entry.pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(
-            remove_random_frame,
-            text="Remover Aleatório",
-            command=self._on_random_remove_clicked
-        ).pack(fill=tk.X, pady=5)
+        ).pack(fill=tk.X)
+
         
         # === FIM DOS CONTROLES ===
         
         # === CANVAS (DIREITA) ===
-        canvas_frame = ttk.Frame(main_frame)
-        canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        canvas_container = ttk.Frame(main_frame)
+        canvas_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Canvas temático
+        # Canvas clean
         self.canvas = tk.Canvas(
-            canvas_frame,
-            bg="#2b1b17",  # Fundo Madeira Escura
+            canvas_container,
+            bg="#121212", 
             highlightthickness=0
         )
         
-        v_scrollbar = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=self.canvas.yview)
-        h_scrollbar = ttk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL, command=self.canvas.xview)
+        v_scrollbar = ttk.Scrollbar(canvas_container, orient=tk.VERTICAL, command=self.canvas.yview)
+        h_scrollbar = ttk.Scrollbar(canvas_container, orient=tk.HORIZONTAL, command=self.canvas.xview)
         
         self.canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
         
@@ -377,47 +340,24 @@ class MainWindow:
             messagebox.showerror("Erro", f"Valores inválidos: {e}")
     
     def _on_random_remove_clicked(self):
-        """Callback do botão Remover Aleatório."""
-        try:
-            count = int(self.remove_count_entry.get())
-            
-            if count <= 0:
-                messagebox.showerror("Erro", "Quantidade deve ser > 0")
-                return
-            
-            if self.on_random_remove:
-                self.on_random_remove(count)
-        
-        except ValueError as e:
-            messagebox.showerror("Erro", f"Valor inválido: {e}")
+        """Callback do botão Remover Aleatório. (Simplificado/Oculto na UI principal)"""
+        if self.on_random_remove:
+            self.on_random_remove(1) # Default 
     
     def _on_next_clicked(self):
-        """Callback do botão Próximo."""
-        if self.on_step_next:
-            self.on_step_next()
+        if self.on_step_next: self.on_step_next()
     
     def _on_prev_clicked(self):
-        """Callback do botão Anterior."""
-        if self.on_step_prev:
-            self.on_step_prev()
+        if self.on_step_prev: self.on_step_prev()
     
     def _on_reset_clicked(self):
-        """Callback do botão Início."""
-        if self.on_reset:
-            self.on_reset()
+        if self.on_reset: self.on_reset()
     
     def _on_play_clicked(self):
-        """Callback do botão Play."""
-        if self.on_play:
-            self.on_play()
+        if self.on_play: self.on_play()
     
     def _parse_key(self) -> Optional[any]:
-        """
-        Faz parse da chave digitada.
-        
-        Returns:
-            Chave parseada ou None se inválido
-        """
+        """Faz parse da chave digitada."""
         key_str = self.key_entry.get().strip()
         if not key_str:
             messagebox.showwarning("Aviso", "Digite uma chave")
@@ -435,35 +375,19 @@ class MainWindow:
     # === MÉTODOS PÚBLICOS PARA ATUALIZAR UI ===
     
     def update_metrics(self, node_accesses: int, batch_time_ms: Optional[float]):
-        """
-        Atualiza labels de métricas.
-        (Desabilitado: UI simplificada)
-        """
         pass
     
     def update_progress(self, progress_text: str):
-        """Atualiza o texto de progresso da reprodução. (Desabilitado)"""
         pass
     
     def update_event_message(self, message: str):
-        """Atualiza a mensagem do evento atual. (Desabilitado)"""
         pass
     
     def enable_playback_controls(self, has_prev: bool, has_next: bool):
-        """
-        Habilita/desabilita controles de reprodução. (Desabilitado)
-        """
         pass
     
     def show_message(self, title: str, message: str, msg_type: str = "info"):
-        """
-        Mostra uma mensagem ao usuário.
-        
-        Args:
-            title: Título da mensagem
-            message: Conteúdo da mensagem
-            msg_type: Tipo ('info', 'warning', 'error')
-        """
+        """Mostra uma mensagem ao usuário."""
         if msg_type == "info":
             messagebox.showinfo(title, message)
         elif msg_type == "warning":

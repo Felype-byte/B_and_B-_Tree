@@ -8,6 +8,9 @@
 3. Dê duplo clique em `VisualizadorArvoresB.exe`
 
 **PRONTO!** A aplicação deve abrir automaticamente.
+(O executável foi gerado na pasta `dist/VisualizadorArvoresB`)
+
+> **Nota**: Se precisar regenerar o executável, rode o arquivo `gerar_executavel.bat`.
 
 ---
 
@@ -66,8 +69,16 @@ Após qualquer operação:
 3. Observe a **mensagem do evento** mostrando cada passo
 
 ### Métricas
-- **Acessos a nós**: Contador de visitas (simula I/O)
-- **Tempo do lote**: Tempo total em milissegundos
+### Métricas e Contadores (Requisito do Trabalho)
+
+O trabalho exige:
+1.  **Timer (Tempo total)**:
+    - Onde ver: Ao realizar inserção/remoção "Aleatória", um popup aparece ao final mostrando `Tempo: X ms`.
+2.  **Contador de Passos (Acessos a nós)**:
+    - Onde ver: 
+        - No popup de operações aleatórias.
+        - Na barra de status/mensagens durante operações passo a passo ("Acessos a nós: X").
+
 
 ---
 

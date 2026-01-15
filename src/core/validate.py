@@ -199,22 +199,31 @@ def validate_bplustree(tree) -> bool:
             f"(árvore não está balanceada)"
         )
     
-    # Verificar encadeamento de folhas
-    if leaf_nodes:
-        # Ordenar folhas pela primeira chave
-        leaf_nodes_sorted = sorted(leaf_nodes, key=lambda n: n.keys[0] if n.keys else float('inf'))
-        
-        # Verificar que next_leaf aponta corretamente
-        for i in range(len(leaf_nodes_sorted) - 1):
-            current = leaf_nodes_sorted[i]
-            next_expected = leaf_nodes_sorted[i + 1]
+    # Verificar encadeamento de folhas via first_leaf
+    if tree.first_leaf:
+        current = tree.first_leaf
+        count = 0
+        while current:
+            count += 1
+            if current.is_leaf is False:
+                 raise ValidationError(f"Nó na lista encadeada {current.id} não é marcado como folha")
             
-            if current.next_leaf != next_expected:
-                raise ValidationError(
-                    f"Encadeamento de folhas incorreto: folha {current.id} "
-                    f"deveria apontar para {next_expected.id}, "
-                    f"mas aponta para {current.next_leaf.id if current.next_leaf else 'None'}"
-                )
+            if current.next_leaf:
+                # Verificar se o próximo tem chaves maiores ou iguais
+                if current.keys and current.next_leaf.keys:
+                    if current.keys[-1] > current.next_leaf.keys[0]:
+                         raise ValidationError(
+                            f"Erro de ordenação na lista encadeada: "
+                            f"Folha {current.id} (max {current.keys[-1]}) > "
+                            f"Folha {current.next_leaf.id} (min {current.next_leaf.keys[0]})"
+                         )
+            current = current.next_leaf
+            
+        if count != len(leaf_nodes):
+             raise ValidationError(
+                f"Lista encadeada tem {count} nós, mas árvore tem {len(leaf_nodes)} folhas. "
+                f"Possível quebra de link."
+             )
         
         # Última folha deve ter next_leaf = None
         if leaf_nodes_sorted[-1].next_leaf is not None:

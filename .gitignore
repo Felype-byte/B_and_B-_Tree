@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller
+dist/
+build/
+*.spec
+
+# VS Code
+.vscode/
+
+# Virtual Env
+env/
+venv/
+.env
+
+# Gemini
+.gemini/

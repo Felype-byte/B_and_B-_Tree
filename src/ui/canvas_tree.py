@@ -39,8 +39,8 @@ def layout_tree(root_node, get_children_func) -> Tuple[Dict[int, Tuple[int, int]
                 queue.append((child, level + 1))
     
     # 2. Configurações
-    y_spacing = 120  # Mais espaço vertical
-    leaf_slot_width = 160 # Mais espaço horizontal entre nós (evita sobreposição)
+    y_spacing = 100 
+    leaf_slot_width = 110 # Compactado para visual moderno
     
     positions = {}
     
@@ -71,18 +71,26 @@ def layout_tree(root_node, get_children_func) -> Tuple[Dict[int, Tuple[int, int]
 
 class TreeCanvas:
     """
-    Canvas com suporte a Background Image e Centralização.
+    Canvas moderno com suporte a nodes arredondados.
     """
     
     def __init__(self, canvas: tk.Canvas):
         self.canvas = canvas
-        self.node_width = 80
         self.node_height = 40
-        self.key_spacing = 15
         
-        # Assets
-        self.bg_image_ref = None
-        self._load_assets()
+        # Cores (Modern Dark Palette)
+        self.colors = {
+            "bg": "#121212",
+            "node_fill": "#2c2c2c",
+            "node_outline": "#3700b3",
+            "node_text": "#ffffff",
+            "highlight_fill": "#bb86fc",
+            "highlight_outline": "#ffffff",
+            "highlight_text": "#000000",
+            "edge": "#444444",
+            "edge_highlight": "#03dac6",
+            "root_fill": "#cf6679", # Variação para raiz
+        }
         
         # Estado atual da árvore para re-renderizar no resize
         self.current_tree = None
@@ -91,188 +99,153 @@ class TreeCanvas:
         # Bind de resize
         self.canvas.bind("<Configure>", self._on_resize)
         
-    def _load_assets(self):
-        """Carrega assets gráficos."""
-        try:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            # Background
-            bg_path = os.path.join(base_dir, "bg_forest.png")
-            if os.path.exists(bg_path):
-                pil_img = Image.open(bg_path)
-                pil_img = pil_img.resize((2000, 1500), Image.LANCZOS)
-                self.bg_image_ref = ImageTk.PhotoImage(pil_img)
-                self.canvas.create_image(0, 0, image=self.bg_image_ref, anchor="nw", tags="bg")
-                
-        except Exception as e:
-            print(f"Erro ao carregar assets: {e}")
-
     def _on_resize(self, event):
         """Re-centraliza a árvore quando a janela muda de tamanho."""
         if self.current_tree:
             self.render(self.current_tree, self.current_highlight)
 
     def clear(self):
-        """Limpa canvas mantendo o background."""
-        items = self.canvas.find_all()
-        for item in items:
-            tags = self.canvas.gettags(item)
-            if "bg" not in tags:
-                self.canvas.delete(item)
+        """Limpa canvas."""
+        self.canvas.delete("all")
     
-    def draw_node(self, x: int, y: int, keys: List[Any], node_id: int,
+    def create_rounded_rect(self, x1, y1, x2, y2, radius=25, **kwargs):
+        """Cria um retângulo com bordas arredondadas (helper customizado)."""
+        points = [x1+radius, y1,
+                  x1+radius, y1,
+                  x2-radius, y1,
+                  x2-radius, y1,
+                  x2, y1,
+                  x2, y1+radius,
+                  x2, y1+radius,
+                  x2, y2-radius,
+                  x2, y2-radius,
+                  x2, y2,
+                  x2-radius, y2,
+                  x2-radius, y2,
+                  x1+radius, y2,
+                  x1+radius, y2,
+                  x1, y2,
+                  x1, y2-radius,
+                  x1, y2-radius,
+                  x1, y1+radius,
+                  x1, y1+radius,
+                  x1, y1]
+
+        return self.canvas.create_polygon(points, **kwargs, smooth=True)
+
+    def draw_node(self, cx: int, cy: int, keys: List[Any], node_id: int,
                   highlight_node: bool = False,
                   highlight_key_index: Optional[int] = None,
                   is_root: bool = False):
         """
-        Desenha um nó como folhas (Vetorial).
+        Desenha um nó estilo 'Pill' (Cápsula).
         """
-        num_keys = len(keys)
-        if num_keys == 0: return
+        if not keys: return
 
-        # Configuração de Cores (Raiz vs Normal)
-        if is_root:
-            leaf_width = 65
-            leaf_height = 80
-            fill_color = "#fdd835" # Ouro
-            outline_color = "#f57f17" # Ouro escuro
-            detail_color = "#fff59d" # Ouro claro
-            stem_color = "#ffd54f"
-        else:
-            leaf_width = 55 
-            leaf_height = 70
-            fill_color = "#689f38" # Verde
-            outline_color = "#c5e1a5" # Verde claro
-            detail_color = "#8bc34a" # Verde médio
-            stem_color = "#a1887f"
-
-        spacing = 10 # Espaçamento aumentado conforme pedido
-        total_width = num_keys * leaf_width + (num_keys - 1) * spacing
-        start_x = x - total_width // 2
+        # Configuração de estilo
+        fill_color = self.colors["node_fill"]
+        outline_color = self.colors["node_outline"]
+        text_color = self.colors["node_text"]
         
-        # Haste que segura as folhas
-        if num_keys > 1:
-            points = [
-                start_x + leaf_width//2, y,
-                start_x + total_width - leaf_width//2, y
-            ]
-            self.canvas.create_line(
-                points,
-                fill=stem_color,
-                width=6,
-                capstyle=tk.ROUND,
-                tags=f"node_{node_id}"
-            )
+        if is_root:
+             fill_color = "#332940" # Roxo escuro
+        
+        if highlight_node:
+             outline_color = self.colors["highlight_outline"]
+             # Se for highlight geral do node
+             if highlight_key_index is None:
+                 fill_color = self.colors["highlight_fill"]
+                 text_color = self.colors["highlight_text"]
 
+        # Dimensões dinâmicas baseadas no conteúdo
+        # Largura estimada por chave
+        key_width = 35
+        padding = 20
+        total_width = max(60, len(keys) * key_width + padding)
+        total_height = 40
+        
+        x1 = cx - total_width // 2
+        y1 = cy - total_height // 2
+        x2 = cx + total_width // 2
+        y2 = cy + total_height // 2
+        
+        # Sombra suave (simples, offset)
+        self.create_rounded_rect(x1+3, y1+3, x2+3, y2+3, radius=20, fill="#000000", tags=f"node_{node_id}")
+
+        # Corpo do Nó
+        self.create_rounded_rect(x1, y1, x2, y2, radius=20, 
+                                 fill=fill_color, outline=outline_color, width=2,
+                                 tags=f"node_{node_id}")
+        
+        # Desenhar chaves
+        # Distribuir chaves uniformemente
+        section_width = total_width / len(keys)
+        
         for i, key in enumerate(keys):
-            leaf_cx = start_x + i * (leaf_width + spacing) + leaf_width // 2
-            leaf_cy = y + 8
+            # Pos x da chave
+            kx = x1 + (i * section_width) + (section_width / 2)
+            ky = cy
             
-            # Ajuste de highlight
-            current_fill = fill_color
-            current_outline = outline_color
-            text_color = "white"
+            # Highlight específico da chave (Bola ao redor da chave)
+            if highlight_node and highlight_key_index == i:
+                 self.canvas.create_oval(kx-12, ky-12, kx+12, ky+12, fill=self.colors["highlight_fill"], outline="")
+                 k_text_color = self.colors["highlight_text"]
+            else:
+                 k_text_color = text_color
             
-            if highlight_node and (highlight_key_index is None or highlight_key_index == i):
-                current_fill = "#ffd700" 
-                current_outline = "#ffff00" # Muito brilhante
-                text_color = "black"
-
-            # Desenhar Folha (Polígono)
-            pts = [
-                 leaf_cx, leaf_cy + leaf_height//2,     # Ponta inferior
-                 leaf_cx - leaf_width//2, leaf_cy + leaf_height//6, 
-                 leaf_cx - leaf_width//4, leaf_cy - leaf_height//2, 
-                 leaf_cx, leaf_cy - leaf_height//1.5,   # Ponta superior
-                 leaf_cx + leaf_width//4, leaf_cy - leaf_height//2, 
-                 leaf_cx + leaf_width//2, leaf_cy + leaf_height//6, 
-            ]
-            
-            # Sombra
-            self.canvas.create_polygon(
-                [(x-1, y+2) for x, y in zip(pts[0::2], pts[1::2])],
-                fill="#1b1b1b", outline="", tags=f"node_{node_id}"
-            )
-            
-            # Corpo
-            self.canvas.create_polygon(
-                pts,
-                fill=current_fill,
-                outline=current_outline,
-                width=2,
-                smooth=True,
-                tags=f"node_{node_id}"
-            )
-            
-            # Nervura/Detalhe
-            self.canvas.create_line(
-                leaf_cx, leaf_cy + leaf_height//2 - 5,
-                leaf_cx, leaf_cy - leaf_height//2 + 10,
-                fill=current_outline, width=1,
-                tags=f"node_{node_id}"
-            )
-
-            # Texto (Outline preto para legibilidade)
             self.canvas.create_text(
-                leaf_cx+1, leaf_cy+1,
-                text=str(key), font=("Segoe UI", 11, "bold"), fill="black", tags=f"node_{node_id}"
-            )
-            self.canvas.create_text(
-                leaf_cx, leaf_cy,
+                kx, ky,
                 text=str(key),
                 font=("Segoe UI", 11, "bold"),
-                fill=text_color,
+                fill=k_text_color,
                 tags=f"node_{node_id}"
             )
+            
+            # Separadores verticais (sutis) entre chaves
+            if i < len(keys) - 1:
+                sep_x = x1 + (i + 1) * section_width
+                self.canvas.create_line(sep_x, y1+8, sep_x, y2-8, fill="#444444", width=1)
 
-        # ID Debug (Com Badge/Placa)
-        # Badge de fundo (Círculo ou plaquinha)
-        self.canvas.create_oval(
-            x - 12, y - 40, 
-            x + 12, y - 16,
-            fill="#3e2723", # Madeira escura/Pedra
-            outline="#d7ccc8", # Borda clara
-            width=2,
-            tags=f"node_{node_id}"
-        )
-        # Texto Principal
+        # ID Badge (Pequeno, acima)
         self.canvas.create_text(
-            x, y - 28,
+            cx, y1 - 10,
             text=f"#{node_id}",
-            font=("Consolas", 10, "bold"),
-            fill="#ffffff", # Branco brilhante
+            font=("Consolas", 8),
+            fill="#666666",
             tags=f"node_{node_id}"
         )
     
     def draw_edge(self, x1: int, y1: int, x2: int, y2: int,
                   highlight: bool = False):
         """
-        Desenha aresta cipó.
+        Desenha aresta (linha curva suave).
         """
         if highlight:
-            color = "#ffab40" # Laranja néon
-            width = 5
+            color = self.colors["edge_highlight"]
+            width = 3
         else:
-            color = "#d7ccc8" # Bege claro/Cipó seco (Alto contraste no fundo escuro)
-            width = 4
+            color = self.colors["edge"]
+            width = 2
         
-        y1_adjusted = y1 + 25
-        y2_adjusted = y2 - 25
+        # Ajuste para sair da parte de baixo do nó e entrar no topo
+        start_y = y1 + 20 # Metade da altura do nó
+        end_y = y2 - 20
         
-        mid_y = (y1_adjusted + y2_adjusted) // 2
-        
+        # Bezier Curve vertical
         self.canvas.create_line(
-            x1, y1_adjusted,
-            x1, mid_y,
-            x2, mid_y,
-            x2, y2_adjusted,
+            x1, start_y,
+            x2, end_y,
             fill=color,
             width=width,
             smooth=True,
-            splinesteps=40,
-            capstyle=tk.ROUND,
-            tags="edge"
+            # tags="edge" # Removed tags to prevent deletion issues if simplified
         )
+        
+        # Opcional: Curva mais bonita (Cubic Bezier)
+        # Pontos de controle
+        # cp1 = (x1, start_y + 50)
+        # cp2 = (x2, end_y - 50)
+        # self.canvas.create_line(x1, start_y, x1, start_y+40, x2, end_y-40, x2, end_y, smooth=True, ...)
     
     def render(self, tree, highlight_info: Optional[Dict] = None):
         """
@@ -288,9 +261,9 @@ class TreeCanvas:
             ch = self.canvas.winfo_height()
             self.canvas.create_text(
                 cw//2, ch//2,
-                text="Árvore Vazia - Plante a primeira semente!",
-                font=("Segoe UI", 16, "italic"),
-                fill="#d7ccc8"
+                text="Plante uma semente",
+                font=("Segoe UI", 16),
+                fill="#444444"
             )
             return
         
@@ -306,11 +279,50 @@ class TreeCanvas:
         else:
             offset_x = 50
             
-        offset_x += 40 # Metade de 80 (novo slot)
+        offset_x += 55 # Margem extra
         offset_y = 50 
         
         # 3. Aplicar offset e desenhar
         all_nodes = tree.get_all_nodes()
+
+        # [NOVO] Desenhar conexões de folhas (Apenas para B+ Tree)
+        # Verifica se é BPlusTree checando se existe atributo first_leaf
+        if hasattr(tree, 'first_leaf') and tree.first_leaf:
+            current = tree.first_leaf
+            while hasattr(current, 'next_leaf') and current.next_leaf:
+                next_node = current.next_leaf
+                if current.id in positions and next_node.id in positions:
+                    x1, y1 = positions[current.id]
+                    x2, y2 = positions[next_node.id]
+                    
+                    # Ajustar coordenadas com offset
+                    ax1, ay1 = x1 + offset_x, y1 + offset_y
+                    ax2, ay2 = x2 + offset_x, y2 + offset_y
+                    
+                    # Desenhar seta
+                    # Sair da direita do 1º, entrar na esquerda do 2º
+                    # assumindo altura via self.node_height (aprox 40)
+                    
+                    # Ponto de saída (Direita do nó 1)
+                    # Largura estimada do nó (recalcular ou estimar fixo/dinamico)
+                    # Vamos desenhar uma linha reta ou curva entre os centros por baixo ou pelo meio
+                    # Melhor: Seta conectando as laterais
+                    
+                    # Como layout é por níveis, folhas estão no mesmo Y geralmente.
+                    # Mas layout_tree pode retornar Y levemente diferente se árvore desbalanceada (não deveria em B+)
+                    
+                    self.canvas.create_line(
+                        ax1 + 20, ay1 + 25, # Um pouco abaixo do centro
+                        ax2 - 20, ay2 + 25,
+                        fill="#03dac6", # Teal highlight
+                        width=2,
+                        arrow=tk.LAST,
+                        dash=(4, 2), # Tracejado
+                        smooth=True,
+                        tags="btree_link"
+                    )
+                
+                current = next_node
         
         # Arestas
         for node in all_nodes:
@@ -344,9 +356,12 @@ class TreeCanvas:
                 
                 self.draw_node(
                     x, y, node.keys, node.id,
-                    highlight_node, highlight_key_index
+                    highlight_node=highlight_node,
+                    highlight_key_index=highlight_key_index,
+                    is_root=(tree.root.id == node.id)
                 )
         
         final_w = max(canvas_w, tree_w + 100)
         final_h = max(600, tree_h + 100)
         self.canvas.configure(scrollregion=(0, 0, final_w, final_h))
+
