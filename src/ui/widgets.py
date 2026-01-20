@@ -20,6 +20,20 @@ class MainWindow:
         self.root.title("Visualizador de Árvores B e B+")
         self.root.geometry("1200x800")
         
+        # --- PALETA DE CORES GLOBAL (PADRÃO BLUE-GREY/INDIGO) ---
+        self.colors = {
+            "bg_main":       "#eceff1",  # Fundo geral (Blue Grey 50)
+            "bg_panel":      "#ffffff",  # Fundo dos painéis (White)
+            "fg_text":       "#37474f",  # Texto principal (Blue Grey 800)
+            "accent":        "#5c6bc0",  # Cor de destaque/Botões (Indigo 400)
+            "accent_hover":  "#3949ab",  # Hover dos botões (Indigo 600)
+            "border":        "#cfd8dc",  # Bordas sutis (Blue Grey 100)
+            "input_bg":      "#fafafa",  # Fundo dos inputs
+            "scroll_bg":     "#cfd8dc",  # Fundo do scroll
+            "scroll_fg":     "#78909c",  # Barra do scroll
+            "canvas_bg":     "#f4f6f8"   # Fundo do Canvas de desenho
+        }
+        
         # Configurar Tema
         self._setup_theme()
         
@@ -36,40 +50,48 @@ class MainWindow:
         self.on_reset: Optional[Callable] = None
         self.on_play: Optional[Callable] = None
         
-        self.root.configure(bg="#121212")
+        # Aplica a cor de fundo principal na janela raiz
+        self.root.configure(bg=self.colors["bg_main"])
         self._create_widgets()
 
     def _setup_theme(self):
-        """Configura o tema visual (Clean Modern)."""
+        """Configura o tema visual (Cohesive Modern Light)."""
         style = ttk.Style()
         style.theme_use('clam')
         
-        # Paleta Modern Dark
-        bg_dark = "#121212"      # Fundo Principal
-        bg_panel = "#1e1e1e"     # Painéis
-        fg_text = "#e0e0e0"      # Texto Principal
-        accent_color = "#3700b3" # Roxo Profundo (Primary)
-        accent_light = "#6200ea" # Roxo Claro (Hover)
-        border_color = "#333333" # Bordas sutis
+        c = self.colors # Alias para facilitar
         
         # Configuração Geral
-        style.configure(".", background=bg_dark, foreground=fg_text, font=("Segoe UI", 10))
+        style.configure(".", background=c["bg_main"], foreground=c["fg_text"], font=("Segoe UI", 10))
         
-        # Frames
-        style.configure("TFrame", background=bg_dark)
-        style.configure("Panel.TFrame", background=bg_panel)
+        # Frames (Containers)
+        style.configure("TFrame", background=c["bg_main"])
+        style.configure("Panel.TFrame", background=c["bg_panel"])
         
-        # Labelframes
-        style.configure("TLabelframe", background=bg_panel, foreground="#b0bec5", bordercolor=border_color)
-        style.configure("TLabelframe.Label", background=bg_panel, foreground="#81d4fa", font=("Segoe UI", 10, "bold"))
+        # Labelframes (Caixas de grupo)
+        style.configure("TLabelframe", 
+            background=c["bg_panel"], 
+            foreground=c["fg_text"], 
+            bordercolor=c["border"]
+        )
+        style.configure("TLabelframe.Label", 
+            background=c["bg_panel"], 
+            foreground=c["accent"], 
+            font=("Segoe UI", 10, "bold")
+        )
         
-        # Labels
-        style.configure("TLabel", background=bg_panel, foreground=fg_text)
-        style.configure("Title.TLabel", background=bg_panel, foreground="#ffffff", font=("Segoe UI", 16, "bold"))
+        # Labels (Textos)
+        style.configure("TLabel", background=c["bg_panel"], foreground=c["fg_text"])
+        # Título com fundo transparente (herda do pai) ou ajustado
+        style.configure("Title.TLabel", 
+            background=c["bg_panel"], 
+            foreground=c["accent"], 
+            font=("Segoe UI", 18, "bold")
+        )
         
-        # Botões (Flat Modern)
+        # Botões (Flat Modern Indigo)
         style.configure("TButton", 
-            background=accent_color, 
+            background=c["accent"], 
             foreground="white", 
             borderwidth=0, 
             focuscolor="none",
@@ -77,23 +99,47 @@ class MainWindow:
             font=("Segoe UI", 9, "bold")
         )
         style.map("TButton",
-            background=[('active', accent_light), ('pressed', '#000000')],
-            foreground=[('disabled', '#555555')]
+            background=[('active', c["accent_hover"]), ('pressed', c["fg_text"])],
+            foreground=[('disabled', '#b0bec5')]
         )
         
         # Radiobuttons
-        style.configure("TRadiobutton", background=bg_panel, foreground=fg_text)
-        style.map("TRadiobutton", background=[('active', bg_panel)])
+        style.configure("TRadiobutton", background=c["bg_panel"], foreground=c["fg_text"])
+        style.map("TRadiobutton", 
+            background=[('active', c["bg_panel"])],
+            foreground=[('active', c["accent"])]
+        )
         
-        # Entry
-        style.configure("TEntry", fieldbackground="#2c2c2c", foreground="white", insertcolor="white", bordercolor=border_color)
+        # Entry (Caixas de texto - Otimizadas)
+        style.configure("TEntry", 
+            fieldbackground=c["input_bg"], 
+            foreground=c["fg_text"], 
+            insertcolor=c["fg_text"], 
+            bordercolor=c["border"],
+            lightcolor=c["border"],
+            darkcolor=c["border"]
+        )
         
-        # Scale
-        style.configure("Horizontal.TScale", background=bg_panel, troughcolor="#2c2c2c", sliderthickness=15)
+        # Scale (Slider)
+        style.configure("Horizontal.TScale", 
+            background=c["bg_panel"], 
+            troughcolor=c["border"], 
+            sliderthickness=15
+        )
         
-        # Scrollbar
-        style.configure("Vertical.TScrollbar", background="#2c2c2c", troughcolor="#121212", arrowcolor="#e0e0e0")
-        style.configure("Horizontal.TScrollbar", background="#2c2c2c", troughcolor="#121212", arrowcolor="#e0e0e0")
+        # Scrollbar (Barras de rolagem - Harmônicas)
+        style.configure("Vertical.TScrollbar", 
+            background=c["scroll_fg"], 
+            troughcolor=c["bg_main"], 
+            arrowcolor="white",
+            bordercolor=c["bg_main"]
+        )
+        style.configure("Horizontal.TScrollbar", 
+            background=c["scroll_fg"], 
+            troughcolor=c["bg_main"], 
+            arrowcolor="white",
+            bordercolor=c["bg_main"]
+        )
 
     def _create_widgets(self):
         """Cria todos os widgets da interface."""
@@ -114,8 +160,13 @@ class MainWindow:
         left_container.pack(side=tk.LEFT, fill=tk.Y)
         left_container.pack_propagate(False)
         
-        # Canvas para scroll dos controles
-        self.ctrl_canvas = tk.Canvas(left_container, bg="#1e1e1e", highlightthickness=0, width=320)
+        # Canvas para scroll dos controles (Fundo combina com bg_main)
+        self.ctrl_canvas = tk.Canvas(
+            left_container, 
+            bg=self.colors["bg_main"], 
+            highlightthickness=0, 
+            width=320
+        )
         ctrl_scrollbar = ttk.Scrollbar(left_container, orient="vertical", command=self.ctrl_canvas.yview)
         
         ctrl_inner = ttk.Frame(self.ctrl_canvas, style="Panel.TFrame")
@@ -133,7 +184,7 @@ class MainWindow:
         ctrl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.ctrl_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Padding interno
+        # Padding interno (Cria o efeito de "Card" branco sobre fundo cinza)
         pad_frame = ttk.Frame(ctrl_inner, style="Panel.TFrame")
         pad_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
@@ -265,10 +316,10 @@ class MainWindow:
         canvas_container = ttk.Frame(main_frame)
         canvas_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Canvas clean
+        # Canvas clean com cor ajustada ao tema
         self.canvas = tk.Canvas(
             canvas_container,
-            bg="#121212", 
+            bg=self.colors["canvas_bg"], 
             highlightthickness=0
         )
         

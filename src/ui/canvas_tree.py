@@ -6,16 +6,18 @@ from math import pow
 
 def layout_tree(root_node, get_children_func) -> Tuple[Dict[int, Tuple[int, int]], int, int]:
     """
-    Calcula posições (x, y) relativas (centro em 0, ou começando de 0).
-    Args:
-        root_node: Nó raiz
-        get_children_func: Função que retorna filhos
-    Returns:
-        Tuple (Positions Dict, Tree Width, Tree Height)
+    Calcula posições (x, y) com espaçamento dinâmico baseado na largura real dos nós.
+    Corrige sobreposição em graus elevados.
     """
     if root_node is None:
         return {}, 0, 0
     
+    # --- Helper para estimar largura do nó (Sincronizado com draw_node) ---
+    def get_node_width(node):
+        # Baseado no seu draw_node: 35px por chave + 20px padding
+        # Adicionei + 10px de margem de segurança
+        return max(60, len(node.keys) * 35 + 30)
+
     # 1. Coletar nós e níveis
     nodes_by_level = {}
     leaves = []
@@ -40,30 +42,49 @@ def layout_tree(root_node, get_children_func) -> Tuple[Dict[int, Tuple[int, int]
     
     # 2. Configurações
     y_spacing = 100 
-    leaf_slot_width = 110 # Compactado para visual moderno
+    node_gap = 20 # Espaço mínimo entre nós vizinhos
     
     positions = {}
     
-    # 3. Posicionar Folhas (Relative X)
-    for i, leaf in enumerate(leaves):
-        x = i * leaf_slot_width
-        y = 50 + max_level * y_spacing
-        positions[leaf.id] = (x, y)
+    # 3. Posicionar Folhas (Usando acumulador X dinâmico)
+    current_x = 0
     
-    # 4. Bottom-Up para pais
+    for leaf in leaves:
+        width = get_node_width(leaf)
+        
+        # A posição x é o acumulado + metade da largura (para centralizar)
+        x = current_x + (width / 2)
+        y = 50 + max_level * y_spacing
+        
+        positions[leaf.id] = (x, y)
+        
+        # Move o cursor para o próximo nó (largura atual + gap)
+        current_x += width + node_gap
+    
+    # A largura total da árvore é onde o cursor parou
+    tree_width = current_x
+    
+    # 4. Bottom-Up para pais (Centralizar sobre os filhos)
     for level in range(max_level - 1, -1, -1):
         for node in nodes_by_level[level]:
             children = get_children_func(node)
             if children:
-                first = children[0]
-                last = children[-1]
-                if first.id in positions and last.id in positions:
-                    x = (positions[first.id][0] + positions[last.id][0]) // 2
+                first_child = children[0]
+                last_child = children[-1]
+                
+                # Se filhos já têm posição calculada
+                if first_child.id in positions and last_child.id in positions:
+                    x_start = positions[first_child.id][0]
+                    x_end = positions[last_child.id][0]
+                    
+                    # O pai fica exatamente no meio do intervalo dos filhos
+                    x = (x_start + x_end) / 2
                     y = 50 + level * y_spacing
                     positions[node.id] = (int(x), int(y))
-    
-    # Calcular largura total
-    tree_width = len(leaves) * leaf_slot_width
+            else:
+                # Fallback para nó sem filhos
+                positions[node.id] = (0, 50 + level * y_spacing)
+
     tree_height = 50 + max_level * y_spacing + 100
     
     return positions, tree_width, tree_height
@@ -78,35 +99,72 @@ class TreeCanvas:
         self.canvas = canvas
         self.node_height = 40
         
-        # Cores (Modern Dark Palette)
+        # Cores (Pastel / Light Mode Palette)
         self.colors = {
-            "bg": "#121212",
-            "node_fill": "#2c2c2c",
-            "node_outline": "#3700b3",
-            "node_text": "#ffffff",
-            "highlight_fill": "#bb86fc",
-            "highlight_outline": "#ffffff",
-            "highlight_text": "#000000",
-            "edge": "#444444",
-            "edge_highlight": "#03dac6",
-            "root_fill": "#cf6679", # Variação para raiz
+            "bg": "#f4f6f8",           # Fundo cinza/azulado muito claro (Soft Cloud)
+            "node_fill": "#ffffff",    # Branco para os nós
+            "node_outline": "#90a4ae", # Cinza azulado suave para borda
+            "node_text": "#37474f",    # Cinza escuro para texto (Alto contraste)
+            "highlight_fill": "#ffe082", # Amarelo/Âmbar pastel
+            "highlight_outline": "#ffb300", # Âmbar mais escuro
+            "highlight_text": "#3e2723", # Marrom escuro para texto destacado
+            "edge": "#cfd8dc",         # Cinza claro para conexões
+            "edge_highlight": "#009688", # Verde azulado (Teal) para destaque
+            "root_fill": "#e1bee7",    # Roxo pastel suave para a raiz
         }
         
         # Estado atual da árvore para re-renderizar no resize
         self.current_tree = None
         self.current_highlight = None
+
+        # --- ZOOM: Variável para rastrear a escala atual ---
+        self.current_scale = 1.0
         
         # Bind de resize
         self.canvas.bind("<Configure>", self._on_resize)
+
+        # --- ZOOM: Binds para a roda do mouse ---
+        # Windows e MacOS
+        self.canvas.bind("<MouseWheel>", self.zoom)
+        # Linux (pode precisar de Button-4 e Button-5)
+        self.canvas.bind("<Button-4>", self.zoom)
+        self.canvas.bind("<Button-5>", self.zoom)
         
     def _on_resize(self, event):
         """Re-centraliza a árvore quando a janela muda de tamanho."""
         if self.current_tree:
             self.render(self.current_tree, self.current_highlight)
 
+    # --- ZOOM: Função para lidar com o evento de scroll ---
+    def zoom(self, event):
+        # Determina a direção e o fator de escala
+        scale_factor = 1.0
+        
+        # Verifica eventos de diferentes sistemas operacionais
+        if event.delta > 0 or event.num == 4:  # Scroll para cima (Zoom In)
+            scale_factor = 1.1
+        elif event.delta < 0 or event.num == 5:  # Scroll para baixo (Zoom Out)
+            scale_factor = 0.9
+        
+        # Limites de zoom (opcional, para evitar zoom excessivo)
+        new_total_scale = self.current_scale * scale_factor
+        if new_total_scale < 0.2 or new_total_scale > 4.0:
+            return
+
+        self.current_scale = new_total_scale
+
+        # Aplica a escala a todos os itens ("all")
+        # Usa a posição do mouse (event.x, event.y) como âncora do zoom
+        self.canvas.scale("all", event.x, event.y, scale_factor, scale_factor)
+        
+        # Atualiza a região de rolagem para se ajustar ao novo tamanho do conteúdo
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
     def clear(self):
         """Limpa canvas."""
         self.canvas.delete("all")
+        # Atualiza a cor de fundo do widget canvas
+        self.canvas.configure(bg=self.colors["bg"])
     
     def create_rounded_rect(self, x1, y1, x2, y2, radius=25, **kwargs):
         """Cria um retângulo com bordas arredondadas (helper customizado)."""
@@ -148,7 +206,7 @@ class TreeCanvas:
         text_color = self.colors["node_text"]
         
         if is_root:
-             fill_color = "#332940" # Roxo escuro
+             fill_color = self.colors["root_fill"] # Usa a cor pastel definida no dict
         
         if highlight_node:
              outline_color = self.colors["highlight_outline"]
@@ -169,8 +227,8 @@ class TreeCanvas:
         x2 = cx + total_width // 2
         y2 = cy + total_height // 2
         
-        # Sombra suave (simples, offset)
-        self.create_rounded_rect(x1+3, y1+3, x2+3, y2+3, radius=20, fill="#000000", tags=f"node_{node_id}")
+        # Sombra suave (simples, offset) - Cor ajustada para o tema claro
+        self.create_rounded_rect(x1+3, y1+3, x2+3, y2+3, radius=20, fill="#b0bec5", tags=f"node_{node_id}")
 
         # Corpo do Nó
         self.create_rounded_rect(x1, y1, x2, y2, radius=20, 
@@ -204,14 +262,15 @@ class TreeCanvas:
             # Separadores verticais (sutis) entre chaves
             if i < len(keys) - 1:
                 sep_x = x1 + (i + 1) * section_width
-                self.canvas.create_line(sep_x, y1+8, sep_x, y2-8, fill="#444444", width=1)
+                # Cor do separador ajustada para o tema claro
+                self.canvas.create_line(sep_x, y1+8, sep_x, y2-8, fill="#cfd8dc", width=1)
 
         # ID Badge (Pequeno, acima)
         self.canvas.create_text(
             cx, y1 - 10,
             text=f"#{node_id}",
             font=("Consolas", 8),
-            fill="#666666",
+            fill="#78909c", # Cinza azulado médio
             tags=f"node_{node_id}"
         )
     
@@ -263,7 +322,7 @@ class TreeCanvas:
                 cw//2, ch//2,
                 text="Plante uma semente",
                 font=("Segoe UI", 16),
-                fill="#444444"
+                fill="#90a4ae" # Cinza azulado
             )
             return
         
@@ -314,7 +373,7 @@ class TreeCanvas:
                     self.canvas.create_line(
                         ax1 + 20, ay1 + 25, # Um pouco abaixo do centro
                         ax2 - 20, ay2 + 25,
-                        fill="#03dac6", # Teal highlight
+                        fill="#00796b", # Teal mais escuro para contraste no fundo claro
                         width=2,
                         arrow=tk.LAST,
                         dash=(4, 2), # Tracejado
@@ -361,7 +420,12 @@ class TreeCanvas:
                     is_root=(tree.root.id == node.id)
                 )
         
-        final_w = max(canvas_w, tree_w + 100)
-        final_h = max(600, tree_h + 100)
-        self.canvas.configure(scrollregion=(0, 0, final_w, final_h))
+        # --- ZOOM: Reaplica a escala atual após o redesenho ---
+        # Se o canvas foi limpo e redesenhado (ex: resize), ele volta para escala 1.0.
+        # Precisamos reaplicar a escala atual se ela for diferente de 1.0.
+        if self.current_scale != 1.0:
+            # Escala tudo ("all") a partir da origem (0,0)
+            self.canvas.scale("all", 0, 0, self.current_scale, self.current_scale)
 
+        # Atualiza o scrollregion baseado no conteúdo final (escalado ou não)
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
