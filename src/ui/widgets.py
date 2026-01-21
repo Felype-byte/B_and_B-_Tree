@@ -366,21 +366,10 @@ class MainWindow:
         # Grid para alinhar controles
         playback_frame.columnconfigure(1, weight=1)
         
-        # Botões de Controle (Esquerda)
-        pb_btns = ttk.Frame(playback_frame, style="Panel.TFrame")
-        pb_btns.pack(side=tk.LEFT)
-        
-        self.btn_reset = ttk.Button(pb_btns, text="⏮", width=3, command=self._on_reset_clicked)
-        self.btn_reset.pack(side=tk.LEFT, padx=2)
-        
-        self.btn_prev = ttk.Button(pb_btns, text="◀", width=3, command=self._on_prev_clicked)
-        self.btn_prev.pack(side=tk.LEFT, padx=2)
-        
-        self.btn_play = ttk.Button(pb_btns, text="▶", width=3, command=self._on_play_clicked)
-        self.btn_play.pack(side=tk.LEFT, padx=2)
-        
-        self.btn_next = ttk.Button(pb_btns, text="▶", width=3, command=self._on_next_clicked)
-        self.btn_next.pack(side=tk.LEFT, padx=2)
+        # Botões de Controle REMOVIDOS A PEDIDO
+        # pb_btns = ttk.Frame(playback_frame, style="Panel.TFrame")
+        # pb_btns.pack(side=tk.LEFT)
+
         
         # Mensagens de Status (Centro/Direita)
         info_frame = ttk.Frame(playback_frame, style="Panel.TFrame")
@@ -590,11 +579,8 @@ class MainWindow:
         self.lbl_event.config(text=message)
     
     def enable_playback_controls(self, has_prev: bool, has_next: bool):
-        state_prev = "normal" if has_prev else "disabled"
-        state_next = "normal" if has_next else "disabled"
-        
-        self.btn_prev.config(state=state_prev)
-        self.btn_next.config(state=state_next)
+        # Botões removidos, nada a fazer
+        pass
     
     def show_message(self, title: str, message: str, msg_type: str = "info"):
         """Mostra uma mensagem ao usuário."""
