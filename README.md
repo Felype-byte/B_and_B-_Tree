@@ -101,21 +101,15 @@ Isso executará uma bateria de testes que verificam:
    - Número de acessos a nós
    - Tempo médio por chave
 
-### 4. Modo Passo a Passo
+### 4. Visualização
 
-Após uma operação de **Inserir** ou **Buscar**:
-
-**Controles:**
-- **◀ Anterior**: Volta um passo
-- **Próximo ▶**: Avança um passo
-- **⏮ Início**: Volta ao primeiro evento
-- **▶ Play**: Reproduz automaticamente (500ms por passo)
+Após uma operação de **Inserir**, **Buscar** ou **Remover**:
 
 **O que você verá:**
 - **Nós destacados** em amarelo quando visitados
 - **Chaves destacadas** em verde durante comparação
-- **Mensagens descritivas** mostrando o que está acontecendo
-- **Contador de progresso** (ex: "5 / 23")
+- **Mensagens descritivas** no topo da tela
+- **Progresso** da operação
 
 ### 5. Métricas
 
