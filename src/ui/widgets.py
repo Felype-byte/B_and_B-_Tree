@@ -5,7 +5,7 @@ Fornece todos os controles de UI para interação com as árvores.
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 from typing import Callable, Optional
 import os
 
@@ -292,13 +292,19 @@ class MainWindow:
         self.random_max_entry.insert(0, "100") 
         self.random_max_entry.pack(side=tk.LEFT, padx=5)
         
-        # Min oculto (default 1)
-        self.random_min_entry = ttk.Entry(nr_inputs, width=0)
+        ttk.Label(nr_inputs, text="Min:").pack(side=tk.LEFT, padx=(5,0))
+        self.random_min_entry = ttk.Entry(nr_inputs, width=6)
         self.random_min_entry.insert(0, "1")
+        self.random_min_entry.pack(side=tk.LEFT, padx=5)
         
         ttk.Button(
             num_random_frame, text="Gerar Números",
             command=self._on_random_insert_clicked
+        ).pack(fill=tk.X, pady=(0, 2))
+
+        ttk.Button(
+            num_random_frame, text="Remover (Qtd)",
+            command=self._on_random_remove_clicked
         ).pack(fill=tk.X)
 
         # ==========================================================
@@ -337,6 +343,11 @@ class MainWindow:
         ttk.Button(
             str_random_frame, text="Gerar Strings",
             command=self._on_random_insert_clicked
+        ).pack(fill=tk.X, pady=(0, 2))
+
+        ttk.Button(
+            str_random_frame, text="Remover (Qtd)",
+            command=self._on_random_remove_clicked
         ).pack(fill=tk.X)
 
         # Inicializa mostrando o numérico
@@ -347,7 +358,49 @@ class MainWindow:
         # === CANVAS (DIREITA) ===
         canvas_container = ttk.Frame(main_frame)
         canvas_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # --- BARRA DE STATUS / PLAYBACK (Topo do Canvas) ---
+        playback_frame = ttk.Frame(canvas_container, style="Panel.TFrame", padding=10)
+        playback_frame.pack(side=tk.TOP, fill=tk.X)
         
+        # Grid para alinhar controles
+        playback_frame.columnconfigure(1, weight=1)
+        
+        # Botões de Controle (Esquerda)
+        pb_btns = ttk.Frame(playback_frame, style="Panel.TFrame")
+        pb_btns.pack(side=tk.LEFT)
+        
+        self.btn_reset = ttk.Button(pb_btns, text="⏮", width=3, command=self._on_reset_clicked)
+        self.btn_reset.pack(side=tk.LEFT, padx=2)
+        
+        self.btn_prev = ttk.Button(pb_btns, text="◀", width=3, command=self._on_prev_clicked)
+        self.btn_prev.pack(side=tk.LEFT, padx=2)
+        
+        self.btn_play = ttk.Button(pb_btns, text="▶", width=3, command=self._on_play_clicked)
+        self.btn_play.pack(side=tk.LEFT, padx=2)
+        
+        self.btn_next = ttk.Button(pb_btns, text="▶", width=3, command=self._on_next_clicked)
+        self.btn_next.pack(side=tk.LEFT, padx=2)
+        
+        # Mensagens de Status (Centro/Direita)
+        info_frame = ttk.Frame(playback_frame, style="Panel.TFrame")
+        info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=15)
+        
+        self.lbl_event = ttk.Label(info_frame, text="Pronto.", font=("Segoe UI", 11, "bold"), foreground=self.colors["accent"])
+        self.lbl_event.pack(anchor="w")
+        
+        self.lbl_progress = ttk.Label(info_frame, text="", font=("Segoe UI", 9))
+        self.lbl_progress.pack(anchor="w")
+        
+        # Métricas (Direita)
+        stats_frame = ttk.Frame(playback_frame, style="Panel.TFrame")
+        stats_frame.pack(side=tk.RIGHT)
+        
+        self.lbl_metrics = ttk.Label(stats_frame, text="I/O: 0", font=("Consolas", 10))
+        self.lbl_metrics.pack(anchor="e")
+        self.lbl_time = ttk.Label(stats_frame, text="0 ms", font=("Consolas", 10))
+        self.lbl_time.pack(anchor="e")
+
         # Canvas clean com cor ajustada ao tema
         self.canvas = tk.Canvas(
             canvas_container,
@@ -464,8 +517,29 @@ class MainWindow:
             messagebox.showerror("Erro", f"Valores inválidos: {e}")
     
     def _on_random_remove_clicked(self):
-        if self.on_random_remove:
-            self.on_random_remove(1) 
+        """
+        Callback adaptativo para remover quantidade aleatória.
+        Usa um dialog para perguntar a quantidade, evitando remover tudo acidentalmente
+        se o usuário esquecer de alterar o campo de inserção.
+        """
+        try:
+            # Pergunta explicitamente ao usuário
+            count = simpledialog.askinteger(
+                "Remover Aleatoriamente",
+                "Quantos itens deseja remover?",
+                minvalue=1,
+                parent=self.root
+            )
+            
+            # Se usuário cancelou (None) ou digitou invalido
+            if count is None:
+                return
+                
+            if self.on_random_remove:
+                self.on_random_remove(count)
+                
+        except ValueError as e:
+            messagebox.showerror("Erro", f"Valor inválido: {e}") 
     
     def _on_next_clicked(self):
         if self.on_step_next: self.on_step_next()
@@ -503,16 +577,24 @@ class MainWindow:
     # === MÉTODOS PÚBLICOS PARA ATUALIZAR UI ===
     
     def update_metrics(self, node_accesses: int, batch_time_ms: Optional[float]):
-        pass
+        io_text = f"Reads: {node_accesses}" 
+        self.lbl_metrics.config(text=io_text)
+        
+        if batch_time_ms is not None:
+            self.lbl_time.config(text=f"{batch_time_ms:.2f} ms")
     
     def update_progress(self, progress_text: str):
-        pass
+        self.lbl_progress.config(text=f"Passo: {progress_text}")
     
     def update_event_message(self, message: str):
-        pass
+        self.lbl_event.config(text=message)
     
     def enable_playback_controls(self, has_prev: bool, has_next: bool):
-        pass
+        state_prev = "normal" if has_prev else "disabled"
+        state_next = "normal" if has_next else "disabled"
+        
+        self.btn_prev.config(state=state_prev)
+        self.btn_next.config(state=state_next)
     
     def show_message(self, title: str, message: str, msg_type: str = "info"):
         """Mostra uma mensagem ao usuário."""

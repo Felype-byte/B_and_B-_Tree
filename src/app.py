@@ -402,7 +402,7 @@ class TreeVisualizerApp:
             keys_rem = choose_existing_keys(self.existing_keys, actual_count)
             
             # Executa remoção em lote
-            elapsed_ms, accesses = batch_remove(self.tree, keys_rem)
+            elapsed_ms, accesses, removed_count = batch_remove(self.tree, keys_rem)
             
             # Atualiza cache local
             self.existing_keys.difference_update(keys_rem)
