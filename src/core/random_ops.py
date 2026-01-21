@@ -1,145 +1,148 @@
 """
-Operações aleatórias em lote para testes de desempenho.
+Módulo: core.random_ops
+Utilitários para operações em lote (Batch Operations).
 
-Fornece funções para gerar dados aleatórios e executar inserções/remoções
-em lote com medição de métricas.
+Suporta:
+- Geração de Números Inteiros
+- Geração de Strings
+- Inserção e Remoção em Lote para B-Tree e B+ Tree
 """
-
 import random
+import time
+import string
 from typing import List, Set, Tuple, Any
-from .btree import BTree
-from .metrics import Metrics
 
+# =============================================================================
+# GERADORES DE DADOS
+# =============================================================================
 
-def generate_unique_random_ints(count: int, lo: int, hi: int, 
-                                 existing_set: Set[int]) -> List[int]:
+def generate_unique_random_ints(count: int, min_val: int, max_val: int, 
+                                existing_keys: Set[Any]) -> List[int]:
     """
-    Gera uma lista de inteiros aleatórios únicos.
-    
-    Args:
-        count: Quantidade de números a gerar
-        lo: Limite inferior (inclusive)
-        hi: Limite superior (inclusive)
-        existing_set: Conjunto de números já existentes (para evitar)
-    
-    Returns:
-        Lista de inteiros únicos
-    
-    Raises:
-        ValueError: Se não houver números suficientes disponíveis
+    Gera uma lista de inteiros aleatórios únicos que ainda não existem na árvore.
     """
-    available = hi - lo + 1 - len(existing_set)
-    if count > available:
-        raise ValueError(
-            f"Não há números suficientes disponíveis. "
-            f"Solicitado: {count}, disponível: {available}"
-        )
+    candidates = set()
     
-    result = []
+    # Proteção: intervalo inválido ou pequeno demais
+    try:
+        range_size = max_val - min_val + 1
+        if range_size < count:
+            return [] 
+    except TypeError:
+        return []
+
+    needed = count
     attempts = 0
-    max_attempts = count * 10  # Evitar loop infinito
+    max_attempts = count * 50
     
-    while len(result) < count and attempts < max_attempts:
-        num = random.randint(lo, hi)
-        if num not in existing_set and num not in result:
-            result.append(num)
+    while len(candidates) < needed and attempts < max_attempts:
+        val = random.randint(min_val, max_val)
+        if val not in existing_keys and val not in candidates:
+            candidates.add(val)
         attempts += 1
-    
-    if len(result) < count:
-        # Fallback: gerar de forma determinística
-        all_nums = set(range(lo, hi + 1)) - existing_set
-        result = random.sample(list(all_nums), count)
-    
-    return result
+        
+    return list(candidates)
 
-
-def batch_insert(tree: BTree, values: List[Any]) -> Tuple[float, int]:
+def generate_random_strings(count: int, length: int, existing_keys: Set[Any]) -> List[str]:
     """
-    Insere uma lista de valores em lote e retorna métricas.
-    
-    Args:
-        tree: Árvore onde inserir
-        values: Lista de valores a inserir
-    
-    Returns:
-        Tupla (tempo_em_ms, acessos_a_nos)
+    Gera uma lista de strings aleatórias únicas (Letras Maiúsculas).
     """
-    # Desabilitar tracer para operações em lote (performance)
-    tracer_was_enabled = tree.tracer.enabled
-    tree.tracer.disable()
+    candidates = set()
+    attempts = 0
+    max_attempts = count * 50
     
-    # Resetar e iniciar métricas
-    initial_accesses = tree.metrics.get_node_accesses()
-    tree.metrics.start_timer()
-    
-    # Inserir todos os valores
-    for value in values:
-        tree.insert(value)
-    
-    # Parar timer e calcular delta
-    elapsed_ms = tree.metrics.stop_timer()
-    final_accesses = tree.metrics.get_node_accesses()
-    accesses_delta = final_accesses - initial_accesses
-    
-    # Restaurar estado do tracer
-    if tracer_was_enabled:
-        tree.tracer.enable()
-    
-    return elapsed_ms, accesses_delta
-
+    while len(candidates) < count and attempts < max_attempts:
+        # Gera string aleatória ex: "ABC"
+        s = ''.join(random.choices(string.ascii_uppercase, k=length))
+        
+        if s not in existing_keys and s not in candidates:
+            candidates.add(s)
+        attempts += 1
+        
+    return list(candidates)
 
 def choose_existing_keys(existing_keys: Set[Any], count: int) -> List[Any]:
     """
-    Escolhe chaves existentes aleatoriamente para remoção.
+    Sorteia N chaves do conjunto de chaves existentes para remoção.
+    Funciona para qualquer tipo (int ou str).
+    """
+    if not existing_keys:
+        return []
+    
+    # Se pedir para remover mais do que existe, retorna tudo o que tem
+    k = min(count, len(existing_keys))
+    
+    return random.sample(list(existing_keys), k)
+
+# =============================================================================
+# EXECUTORES DE LOTE (BATCH)
+# =============================================================================
+
+def batch_insert(tree, keys: List[Any]) -> Tuple[float, int]:
+    """
+    Insere uma lista de valores em lote.
     
     Args:
-        existing_keys: Conjunto de chaves existentes na árvore
-        count: Quantidade de chaves a escolher
-    
+        tree: Instância da BTree ou BPlusTree (Duck Typing)
+        keys: Lista de chaves a inserir
+        
     Returns:
-        Lista de chaves escolhidas
-    
-    Note:
-        Esta função será usada na implementação de remoção (Etapa futura)
+        Tuple: (tempo_ms, total_io_ops)
     """
-    if count > len(existing_keys):
-        count = len(existing_keys)
+    # Desabilitar tracer visual para performance máxima durante o lote
+    tracer_was_enabled = getattr(tree.tracer, 'enabled', False)
+    if hasattr(tree.tracer, 'disable'):
+        tree.tracer.disable()
     
-    return random.sample(list(existing_keys), count)
-
-
-def batch_remove(tree: BTree, values: List[Any]) -> Tuple[float, int]:
-    """
-    Remove uma lista de valores em lote e retorna métricas.
+    # Resetar métricas de acesso para contar apenas esta operação
+    tree.metrics.reset_accesses()
     
-    Args:
-        tree: Árvore de onde remover
-        values: Lista de valores a remover
+    start = time.perf_counter()
     
-    Returns:
-        Tupla (tempo_em_ms, acessos_a_nos)
-    """
-    # Desabilitar tracer para operações em lote (performance)
-    tracer_was_enabled = tree.tracer.enabled
-    tree.tracer.disable()
+    for k in keys:
+        tree.insert(k)
     
-    # Resetar e iniciar métricas
-    initial_accesses = tree.metrics.get_node_accesses()
-    tree.metrics.start_timer()
-    
-    # Remover todos os valores
-    removed_count = 0
-    for value in values:
-        if tree.delete(value):
-            removed_count += 1
-    
-    # Parar timer e calcular delta
-    elapsed_ms = tree.metrics.stop_timer()
-    final_accesses = tree.metrics.get_node_accesses()
-    accesses_delta = final_accesses - initial_accesses
+    end = time.perf_counter()
     
     # Restaurar estado do tracer
-    if tracer_was_enabled:
+    if tracer_was_enabled and hasattr(tree.tracer, 'enable'):
         tree.tracer.enable()
+        
+    total_time = (end - start) * 1000
+    total_ops = tree.metrics.reads + tree.metrics.writes
     
-    return elapsed_ms, accesses_delta
+    return total_time, total_ops
+
+def batch_remove(tree, keys: List[Any]) -> Tuple[float, int, int]:
+    """
+    Remove uma lista de valores em lote.
+    
+    Args:
+        tree: Instância da BTree ou BPlusTree
+        keys: Lista de chaves a remover
+        
+    Returns:
+        Tuple: (tempo_ms, total_io_ops, qtd_sucesso)
+    """
+    tracer_was_enabled = getattr(tree.tracer, 'enabled', False)
+    if hasattr(tree.tracer, 'disable'):
+        tree.tracer.disable()
+    
+    tree.metrics.reset_accesses()
+    
+    start = time.perf_counter()
+    success_count = 0
+    
+    for k in keys:
+        if tree.delete(k):
+            success_count += 1
+            
+    end = time.perf_counter()
+    
+    if tracer_was_enabled and hasattr(tree.tracer, 'enable'):
+        tree.tracer.enable()
+        
+    total_time = (end - start) * 1000
+    total_ops = tree.metrics.reads + tree.metrics.writes
+    
+    return total_time, total_ops, success_count

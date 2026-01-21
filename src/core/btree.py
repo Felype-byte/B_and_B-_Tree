@@ -1,8 +1,31 @@
 """
-Implementação de Árvore B com fanout configurável (3-10).
+Módulo: core.btree
+Implementação Robusta de Árvore B (Standard B-Tree).
 
-Suporta operações de busca e inserção com rastreamento completo
-de eventos para visualização passo a passo.
+Baseado nos algoritmos descritos em:
+Cormen, Leiserson, Rivest, Stein (CLRS) - "Introduction to Algorithms".
+
+Características Principais:
+---------------------------
+1.  **Armazenamento Misto:** Diferente da B+, na B-Tree as chaves e dados residem em qualquer nó 
+    (interno ou folha). Não há duplicação de chaves.
+
+2.  **Inserção (Estratégia Bottom-Up):**
+    A inserção desce recursivamente até encontrar a folha correta. A chave é inserida.
+    Se o nó transbordar (overflow), ele é dividido na volta da recursão (pós-ordem),
+    promovendo a chave mediana para o pai. Se a raiz transbordar, a árvore cresce em altura.
+    *Vantagem:* Garante balanceamento perfeito visual e estrutural.
+
+3.  **Remoção (Estratégia Top-Down Proativa):**
+    Ao descer na árvore para deletar uma chave, garantimos que o nó destino tenha
+    chaves suficientes (pelo menos t). Se tiver apenas o mínimo (t-1), realizamos
+    um empréstimo (rotação) ou fusão (merge) antes de descer.
+    *Vantagem:* Evita o complexo processo de "backtracking" (voltar e corrigir) se
+    um nó ficar vazio lá em baixo.
+
+4.  **Instrumentação (Metrics & Trace):**
+    - count_read(): Simula o custo de I/O ao acessar um nó.
+    - count_write(): Simula o custo de I/O ao gravar um nó modificado.
 """
 
 from typing import List, Optional, Tuple, Any
@@ -12,12 +35,13 @@ from .metrics import Metrics
 
 class BTreeNode:
     """
-    Nó de uma Árvore B.
+    Representa uma Página (Bloco de Disco) da Árvore B.
     
     Attributes:
-        id: Identificador único do nó
-        keys: Lista de chaves ordenadas
-        children: Lista de referências para filhos (vazia em folhas)
+        id (int): Identificador único para fins de visualização.
+        keys (List[Any]): Lista ordenada de chaves.
+        children (List[BTreeNode]): Lista de ponteiros para filhos.
+        _is_leaf (bool): Flag para otimizar verificações.
     """
     
     _id_counter = 0
@@ -31,19 +55,17 @@ class BTreeNode:
     
     @property
     def is_leaf(self) -> bool:
-        """Retorna True se o nó é uma folha."""
-        return len(self.children) == 0
+        """Retorna True se o nó é folha (sem filhos)."""
+        return self._is_leaf
     
     def __repr__(self):
-        return f"Node(id={self.id}, keys={self.keys}, is_leaf={self.is_leaf})"
+        return f"BNode(id={self.id}, keys={self.keys}, leaf={self.is_leaf})"
 
 
 class BTree:
     """
-    Árvore B com fanout configurável.
-    
-    Implementa busca e inserção com split automático e rastreamento
-    completo de eventos para visualização educacional.
+    Controlador da Árvore B.
+    Gerencia a raiz e coordena operações de I/O lógicas.
     """
     
     def __init__(self, fanout_n: int, tracer: Optional[Tracer] = None, 
@@ -52,581 +74,511 @@ class BTree:
         Inicializa a Árvore B.
         
         Args:
-            fanout_n: Grau da árvore (número máximo de filhos), deve estar entre 3 e 10
-            tracer: Rastreador de eventos (opcional)
-            metrics: Rastreador de métricas (opcional)
-        
-        Raises:
-            ValueError: Se fanout_n não estiver entre 3 e 10
+            fanout_n: Ordem da árvore (número máximo de filhos).
+            tracer: Ferramenta de rastreamento visual.
+            metrics: Ferramenta de estatísticas de desempenho.
         """
         if not (3 <= fanout_n <= 10):
             raise ValueError(f"Fanout deve estar entre 3 e 10, recebido: {fanout_n}")
         
-        self.fanout_n = fanout_n
+        self.fanout = fanout_n
+        
+        # Propriedades CLRS
+        # Max Filhos = m
+        # Max Chaves = m - 1
+        # Min Chaves = ceil(m/2) - 1
         self.max_children = fanout_n
         self.max_keys = fanout_n - 1
-        self.min_keys = (fanout_n + 1) // 2 - 1  # Para futuras operações de delete
+        self.min_keys = (fanout_n + 1) // 2 - 1
         
         self.root = BTreeNode(is_leaf=True)
         self.tracer = tracer or Tracer()
         self.metrics = metrics or Metrics()
     
+    # =========================================================================
+    # SEARCH (Busca)
+    # =========================================================================
+    
     def search(self, key: Any) -> dict:
         """
         Busca uma chave na árvore.
         
-        Args:
-            key: Chave a ser buscada
-        
         Returns:
-            Dicionário com: found (bool), node_id (int), index (int), path (list)
+            dict: {found, node_id, index, path}
         """
-        path = []
-        node = self.root
+        return self._search_recursive(self.root, key, path=[])
+
+    def _search_recursive(self, node: BTreeNode, key: Any, path: List[int]) -> dict:
+        """
+        Executa a busca recursiva.
+        Complexidade: O(log N) acessos a disco.
+        """
+        # [I/O] Leitura: Carregando nó na memória
+        self.metrics.count_read()
+        self.tracer.emit(EventType.VISIT_NODE, node.id, {'keys': node.keys.copy()})
         
-        while node is not None:
-            # Emitir evento: visitando nó
-            self.tracer.emit(EventType.VISIT_NODE, node.id, {'keys': node.keys.copy()})
-            self.metrics.tick_node_access()
-            path.append(node.id)
-            
-            # Buscar a chave no nó
-            found_index = None
-            for i, node_key in enumerate(node.keys):
-                # Emitir evento: comparando com chave
-                self.tracer.emit(EventType.COMPARE_KEY, node.id, {
-                    'key_index': i,
-                    'node_key': node_key,
-                    'target_key': key
-                })
-                
-                if key == node_key:
-                    found_index = i
-                    break
-                elif key < node_key:
-                    break
-            
-            # Se encontrou
-            if found_index is not None:
-                self.tracer.emit(EventType.SEARCH_FOUND, node.id, {
-                    'key': key,
-                    'index': found_index
-                })
-                return {
-                    'found': True,
-                    'node_id': node.id,
-                    'index': found_index,
-                    'path': path
-                }
-            
-            # Se é folha e não encontrou
-            if node.is_leaf:
-                self.tracer.emit(EventType.SEARCH_NOT_FOUND, node.id, {'key': key})
-                return {
-                    'found': False,
-                    'node_id': node.id,
-                    'index': -1,
-                    'path': path
-                }
-            
-            # Encontrar filho para descer
-            child_index = 0
-            for i, node_key in enumerate(node.keys):
-                if key < node_key:
-                    child_index = i
-                    break
-            else:
-                child_index = len(node.keys)
-            
-            # Emitir evento: descendo para filho
-            self.tracer.emit(EventType.DESCEND, node.id, {
-                'child_index': child_index,
-                'target_key': key
+        path.append(node.id)
+        
+        # Busca sequencial dentro da página (memória RAM)
+        i = 0
+        while i < len(node.keys) and key > node.keys[i]:
+            # Evento visual apenas
+            self.tracer.emit(EventType.COMPARE_KEY, node.id, {
+                'key_index': i, 'node_key': node.keys[i], 'target_key': key
             })
-            
-            node = node.children[child_index]
+            i += 1
         
-        return {'found': False, 'node_id': -1, 'index': -1, 'path': path}
-    
+        # Verifica se encontrou
+        if i < len(node.keys):
+            self.tracer.emit(EventType.COMPARE_KEY, node.id, {
+                'key_index': i, 'node_key': node.keys[i], 'target_key': key
+            })
+            if key == node.keys[i]:
+                self.tracer.emit(EventType.SEARCH_FOUND, node.id, {'key': key, 'index': i})
+                return {'found': True, 'node_id': node.id, 'index': i, 'path': path}
+        
+        # Se é folha e não achou
+        if node.is_leaf:
+            self.tracer.emit(EventType.SEARCH_NOT_FOUND, node.id, {'key': key})
+            return {'found': False, 'node_id': node.id, 'index': -1, 'path': path}
+        
+        # Descer para o filho
+        self.tracer.emit(EventType.DESCEND, node.id, {'child_index': i, 'target_key': key})
+        return self._search_recursive(node.children[i], key, path)
+
+    # =========================================================================
+    # INSERT (Inserção Bottom-Up)
+    # =========================================================================
+
     def insert(self, key: Any) -> bool:
         """
         Insere uma chave na árvore.
-        
-        Args:
-            key: Chave a ser inserida
-        
-        Returns:
-            True se inseriu com sucesso, False se a chave já existe
+        Usa estratégia Bottom-Up para garantir crescimento pela raiz.
         """
-        # Verificar se já existe (não permitir duplicatas)
-        result = self.search(key)
-        if result['found']:
-            return False
+        # 1. Verificar duplicata (B-Tree padrão não aceita duplicatas)
+        prev_enabled = self.tracer.enabled
+        self.tracer.disable()
+        exists = self.search(key)['found']
+        if prev_enabled: self.tracer.enable()
         
-        # Limpar eventos da busca anterior (vamos traçar a inserção)
+        if exists: return False
+        
         self.tracer.clear()
         
-        # Inserção recursiva (Bottom-Up)
+        # 2. Inserção Recursiva (desce até folha, trata split na volta)
         self._insert_recursive(self.root, key)
         
-        # Verificar se a raiz estourou
+        # 3. Tratamento de Overflow na Raiz
+        # Se após a recursão a raiz estourou, a árvore cresce em altura.
         if len(self.root.keys) > self.max_keys:
             old_root = self.root
-            self.root = BTreeNode(is_leaf=False)
-            self.root.children.append(old_root)
-            self._split_child(self.root, 0)
+            new_root = BTreeNode(is_leaf=False)
+            new_root.children.append(old_root)
+            self.root = new_root
+            
+            # [I/O] Escrita: Nova raiz criada
+            self.metrics.count_write()
+            
+            # Divide a antiga raiz e promove a mediana para a nova raiz
+            self._split_child(new_root, 0)
+            
             self.tracer.emit(EventType.NEW_ROOT, self.root.id, {
-                'old_root_id': old_root.id,
+                'old_root_id': old_root.id, 
                 'promoted_key': self.root.keys[0]
             })
             
         return True
-    
+
     def _insert_recursive(self, node: BTreeNode, key: Any):
         """
-        Lógica recursiva de inserção (Bottom-Up).
-        
-        Args:
-            node: Nó atual
-            key: Chave a inserir
+        Desce a árvore até a folha apropriada e insere a chave.
+        Verifica overflow APÓS inserir (na volta da recursão).
         """
-        # Emitir evento: visitando nó
+        # [I/O] Leitura: Visitando nó para decidir caminho
+        self.metrics.count_read()
         self.tracer.emit(EventType.VISIT_NODE, node.id, {'keys': node.keys.copy()})
-        self.metrics.tick_node_access()
         
         if node.is_leaf:
-            # Folha: Inserir diretamente
-            pos = self._find_insert_pos(node.keys, key)
+            # Caso Base: Inserção ordenada na folha
+            pos = 0
+            while pos < len(node.keys) and key > node.keys[pos]:
+                pos += 1
             node.keys.insert(pos, key)
+            
+            # [I/O] Escrita: Gravação da folha modificada
+            self.metrics.count_write()
+            
             self.tracer.emit(EventType.INSERT_IN_LEAF, node.id, {
-                'key': key,
-                'position': pos,
+                'key': key, 
+                'position': pos, 
                 'keys_after': node.keys.copy()
             })
         else:
-            # Nó Interno: Descer para o filho apropriado
-            child_index = self._find_child_index(node.keys, key)
+            # Caso Recursivo: Encontrar filho correto
+            i = 0
+            while i < len(node.keys) and key > node.keys[i]:
+                i += 1
             
-            # Emitir evento: descendo
             self.tracer.emit(EventType.DESCEND, node.id, {
-                'child_index': child_index,
-                'target_key': key
+                'child_index': i, 'target_key': key
             })
             
-            # Recurso no filho
-            self._insert_recursive(node.children[child_index], key)
+            # Chamada Recursiva
+            self._insert_recursive(node.children[i], key)
             
-            # Check-back (pós-recursão): O filho estourou?
-            if len(node.children[child_index].keys) > self.max_keys:
-                self._split_child(node, child_index)
-    
-    def _split_child(self, parent: BTreeNode, child_index: int):
+            # --- PÓS-RECURSÃO (BACKTRACK) ---
+            # Verificar se o filho onde inserimos acabou estourando
+            if len(node.children[i].keys) > self.max_keys:
+                self._split_child(node, i)
+
+    def _split_child(self, parent: BTreeNode, i: int):
         """
-        Faz split de um filho cheio.
+        Divide um nó filho cheio em dois e sobe a mediana para o pai.
         
         Args:
-            parent: Nó pai
-            child_index: Índice do filho a fazer split
+            parent: Nó pai que receberá a chave promovida.
+            i: Índice do filho cheio na lista de filhos do pai.
         """
-        full_child = parent.children[child_index]
+        full_child = parent.children[i]
+        
+        # Encontrar mediana
         mid = len(full_child.keys) // 2
+        mid_key = full_child.keys[mid]
         
-        # Chave promovida (vai para o pai)
-        promoted_key = full_child.keys[mid]
+        # Criar novo nó irmão (recebe a metade direita)
+        new_node = BTreeNode(is_leaf=full_child.is_leaf)
+        new_node.keys = full_child.keys[mid+1:]
         
-        # Criar novo nó à direita
-        new_child = BTreeNode(is_leaf=full_child.is_leaf)
-        new_child.keys = full_child.keys[mid + 1:]
+        # Se não for folha, move filhos correspondentes também
+        if not full_child.is_leaf:
+            new_node.children = full_child.children[mid+1:]
+            full_child.children = full_child.children[:mid+1] # Mantém filhos da esq
+            
+        # Nó original fica com metade esquerda (remove mediana e direita)
         full_child.keys = full_child.keys[:mid]
         
-        # Se não for folha, dividir os filhos também
-        if not full_child.is_leaf:
-            new_child.children = full_child.children[mid + 1:]
-            full_child.children = full_child.children[:mid + 1]
+        # Conectar no pai
+        parent.children.insert(i + 1, new_node)
+        parent.keys.insert(i, mid_key)
         
-        # Inserir chave promovida no pai
-        parent.keys.insert(child_index, promoted_key)
-        parent.children.insert(child_index + 1, new_child)
+        # [I/O] 3 Escritas:
+        # 1. Nó original (cortado)
+        # 2. Novo nó (criado)
+        # 3. Pai (atualizado com chave e ponteiro)
+        self.metrics.count_write()
+        self.metrics.count_write()
+        self.metrics.count_write()
         
-        # Emitir evento: split
         self.tracer.emit(EventType.SPLIT_NODE, full_child.id, {
-            'promoted_key': promoted_key,
+            'promoted_key': mid_key,
             'left_id': full_child.id,
-            'right_id': new_child.id,
+            'right_id': new_node.id,
             'left_keys': full_child.keys.copy(),
-            'right_keys': new_child.keys.copy()
+            'right_keys': new_node.keys.copy()
         })
-    
-    def _find_insert_pos(self, keys: List[Any], key: Any) -> int:
-        """
-        Encontra a posição de inserção em uma lista de chaves ordenadas.
-        
-        Args:
-            keys: Lista de chaves ordenadas
-            key: Chave a inserir
-        
-        Returns:
-            Índice onde a chave deve ser inserida
-        """
-        for i, k in enumerate(keys):
-            if key < k:
-                return i
-        return len(keys)
-    
-    def _find_child_index(self, keys: List[Any], key: Any) -> int:
-        """
-        Encontra o índice do filho para descer durante inserção.
-        
-        Args:
-            keys: Lista de chaves do nó
-            key: Chave a inserir
-        
-        Returns:
-            Índice do filho
-        """
-        for i, k in enumerate(keys):
-            if key < k:
-                return i
-        return len(keys)
-    
+
+    # =========================================================================
+    # DELETE (Remoção Proativa / Top-Down)
+    # =========================================================================
+
     def delete(self, key: Any) -> bool:
         """
         Remove uma chave da árvore.
         
-        Args:
-            key: Chave a ser removida
-        
-        Returns:
-            True se removeu com sucesso, False se a chave não existe
+        Estratégia: Top-Down Proativa.
+        Garante que, antes de descer para um nó, ele tenha pelo menos 't' chaves.
+        Isso assegura que a remoção em uma folha nunca causará underflow que
+        precise propagar para cima.
         """
-        # Emitir evento de solicitação de remoção
-        self.tracer.emit(EventType.DELETE_REQUEST, None, {'key': key})
+        # Verificar existência
+        prev_enabled = self.tracer.enabled
+        self.tracer.disable()
+        exists = self.search(key)['found']
+        if prev_enabled: self.tracer.enable()
         
-        # Verificar se existe
-        result = self.search(key)
-        if not result['found']:
+        if not exists:
             self.tracer.emit(EventType.SEARCH_NOT_FOUND, None, {'key': key})
             return False
-            
-        # Limpar eventos da busca (manter apenas eventos de delete)
+        
         self.tracer.clear()
         self.tracer.emit(EventType.DELETE_REQUEST, None, {'key': key})
         
-        # Executar deleção recursiva (Bottom-Up)
+        # Iniciar recursão
         self._delete_recursive(self.root, key)
         
-        # Se a raiz ficou vazia e não é folha (tem filhos), reduzir altura
-        # Nota: Se for folha vazia, significa que a árvore ficou vazia (exceto se for recém criada)
-        if len(self.root.keys) == 0 and not self.root.is_leaf:
-            old_root = self.root
-            self.root = old_root.children[0]
-            self.tracer.emit(EventType.SHRINK_ROOT, self.root.id, {
-                'old_root_id': old_root.id,
-                'new_root_id': self.root.id
-            })
-        
+        # Pós-remoção: Se raiz ficar vazia
+        if len(self.root.keys) == 0:
+            if not self.root.is_leaf:
+                # Raiz vazia com filhos -> Árvore encolhe
+                old_root = self.root
+                self.root = self.root.children[0]
+                
+                # [I/O] Escrita: Nova raiz
+                self.metrics.count_write()
+                
+                self.tracer.emit(EventType.SHRINK_ROOT, self.root.id, {
+                    'old_root_id': old_root.id, 
+                    'new_root_id': self.root.id
+                })
+            else:
+                # Árvore vazia
+                pass
+                
         return True
-    
+
     def _delete_recursive(self, node: BTreeNode, key: Any):
         """
-        Lógica recursiva de deleção (Bottom-Up).
-        
-        Args:
-            node: Nó atual
-            key: Chave a remover
+        Algoritmo central de remoção (CLRS).
         """
-        # Emitir evento: visitando nó
+        # [I/O] Leitura
+        self.metrics.count_read()
         self.tracer.emit(EventType.VISIT_NODE, node.id, {'keys': node.keys.copy()})
-        self.metrics.tick_node_access()
         
-        # Encontrar índice da chave no nó
-        key_idx = -1
-        for i, k in enumerate(node.keys):
-            self.tracer.emit(EventType.COMPARE_KEY, node.id, {
-                'key_index': i,
-                'node_key': k,
-                'target_key': key
-            })
-            if k == key:
-                key_idx = i
-                break
-            elif k > key:
-                break
+        # Encontrar chave
+        idx = 0
+        while idx < len(node.keys) and key > node.keys[idx]:
+            idx += 1
         
-        if key_idx != -1:
-            # CASO 1: Chave encontrada neste nó
-            self.tracer.emit(EventType.DELETE_FOUND, node.id, {
-                'key': key,
-                'key_index': key_idx
-            })
+        # --- A CHAVE ESTÁ NESTE NÓ ---
+        if idx < len(node.keys) and key == node.keys[idx]:
+            self.tracer.emit(EventType.DELETE_FOUND, node.id, {'key': key, 'key_index': idx})
             
             if node.is_leaf:
-                # 1a: Folha - remover diretamente
-                node.keys.pop(key_idx)
+                # CASO 1: Remover de folha
+                node.keys.pop(idx)
+                
+                # [I/O] Escrita
+                self.metrics.count_write()
                 self.tracer.emit(EventType.DELETE_IN_LEAF, node.id, {
-                    'key': key,
-                    'key_index': key_idx,
-                    'keys_after': node.keys.copy()
+                    'key': key, 'keys_after': node.keys.copy()
                 })
             else:
-                # 1b: Nó Interno - substituir por predecessor
-                predecessor = self._get_predecessor(node, key_idx)
-                
-                self.tracer.emit(EventType.REPLACE_WITH_PREDECESSOR, node.id, {
-                    'key': key,
-                    'predecessor': predecessor,
-                    'key_index': key_idx
-                })
-                
-                # Substituir chave pelo predecessor
-                node.keys[key_idx] = predecessor
-                
-                # Remover predecessor da subárvore esquerda (recursivamente)
-                # O predecessor está garantido na subárvore children[key_idx]
-                self._delete_recursive(node.children[key_idx], predecessor)
-                
-                # Verificar underflow no filho após o retorno
-                if len(node.children[key_idx].keys) < self.min_keys:
-                    self._handle_underflow(node, key_idx)
-                    
+                # CASO 2: Remover de nó interno (Substituição)
+                self._delete_internal_node_key(node, key, idx)
+        
+        # --- A CHAVE NÃO ESTÁ NESTE NÓ (DESCER) ---
         else:
-            # CASO 2: Chave não está neste nó
             if node.is_leaf:
-                # Não deveria acontecer se verificamos search() antes
-                return
+                return # Should not happen
             
-            # Encontrar filho onde a chave deve estar
-            child_idx = 0
-            for i, k in enumerate(node.keys):
-                if key < k:
-                    child_idx = i
-                    break
-            else:
-                child_idx = len(node.keys)
+            # Filho para onde vamos descer
+            child = node.children[idx]
             
-            # Emitir evento: descendo
-            self.tracer.emit(EventType.DESCEND, node.id, {
-                'child_index': child_idx,
-                'target_key': key
+            # GARANTIA PROATIVA:
+            # Se o filho tem apenas o mínimo de chaves, encha-o antes de descer.
+            if len(child.keys) <= self.min_keys:
+                self._fill_child(node, idx)
+                
+                # O índice pode ter mudado após merge/rotação
+                if idx > len(node.keys): 
+                    idx = len(node.keys)
+                elif idx < len(node.keys) and key > node.keys[idx]:
+                    idx += 1
+            
+            self.tracer.emit(EventType.DESCEND, node.id, {'child_index': idx, 'target_key': key})
+            self._delete_recursive(node.children[idx], key)
+
+    def _delete_internal_node_key(self, node: BTreeNode, key: Any, idx: int):
+        """
+        Trata remoção em nó interno substituindo por Predecessor ou Sucessor.
+        """
+        left_child = node.children[idx]
+        right_child = node.children[idx + 1]
+        
+        # 2a. Usar Predecessor (se filho esq tem chaves extras)
+        if len(left_child.keys) > self.min_keys:
+            predecessor = self._get_predecessor(left_child)
+            
+            self.tracer.emit(EventType.REPLACE_WITH_PREDECESSOR, node.id, {
+                'key': key, 'predecessor': predecessor, 'key_index': idx
             })
             
-            # Recursão
-            self._delete_recursive(node.children[child_idx], key)
+            node.keys[idx] = predecessor
+            # [I/O] Escrita
+            self.metrics.count_write()
             
-            # Backtracking: Verificar underflow no filho
-            if len(node.children[child_idx].keys) < self.min_keys:
-                self._handle_underflow(node, child_idx)
-
-    def _get_predecessor(self, node: BTreeNode, key_idx: int) -> Any:
-        # Método auxiliar para encontrar predecessor (simplesmente desce tudo a direita)
-        current = node.children[key_idx]
-        while not current.is_leaf:
-            current = current.children[-1]
-        return current.keys[-1]
-
-    def _handle_underflow(self, parent: BTreeNode, child_idx: int):
-        """
-        Corrige underflow de um filho através de redistribuição ou merge.
-        
-        Args:
-            parent: Nó pai
-            child_idx: Índice do filho em underflow
-        """
-        child = parent.children[child_idx]
-        
-        # Emitir evento de underflow
-        self.tracer.emit(EventType.UNDERFLOW, child.id, {
-            'num_keys': len(child.keys),
-            'min_keys': self.min_keys
-        })
-        
-        # Tentar pegar emprestado do irmão esquerdo
-        if child_idx > 0:
-            left_sibling = parent.children[child_idx - 1]
-            if len(left_sibling.keys) > self.min_keys:
-                self._redistribute_from_left(parent, child_idx)
-                return
-        
-        # Tentar pegar emprestado do irmão direito
-        if child_idx < len(parent.children) - 1:
-            right_sibling = parent.children[child_idx + 1]
-            if len(right_sibling.keys) > self.min_keys:
-                self._redistribute_from_right(parent, child_idx)
-                return
-        
-        # Não conseguiu redistribuir - fazer merge
-        # Preferir merge com irmão esquerdo
-        if child_idx > 0:
-            self._merge_with_left(parent, child_idx)
+            self._delete_recursive(left_child, predecessor)
+            
+        # 2b. Usar Sucessor (se filho dir tem chaves extras)
+        elif len(right_child.keys) > self.min_keys:
+            successor = self._get_successor(right_child)
+            
+            self.tracer.emit(EventType.REPLACE_WITH_PREDECESSOR, node.id, {
+                'key': key, 'predecessor': successor, 'key_index': idx, 'msg': "Substituindo por Sucessor"
+            })
+            
+            node.keys[idx] = successor
+            # [I/O] Escrita
+            self.metrics.count_write()
+            
+            self._delete_recursive(right_child, successor)
+            
+        # 2c. Ambos no mínimo -> Merge
         else:
-            self._merge_with_right(parent, child_idx)
-    
-    def _redistribute_from_left(self, parent: BTreeNode, child_idx: int):
+            self._merge_children(node, idx)
+            # A chave desceu. Deletar do novo nó fundido.
+            self._delete_recursive(node.children[idx], key)
+
+    def _get_predecessor(self, node: BTreeNode) -> Any:
+        """Retorna maior chave da subárvore (descida à direita)."""
+        curr = node
+        while not curr.is_leaf:
+            # [I/O] Opcional: contar navegação auxiliar
+            self.metrics.count_read()
+            curr = curr.children[-1]
+        return curr.keys[-1]
+
+    def _get_successor(self, node: BTreeNode) -> Any:
+        """Retorna menor chave da subárvore (descida à esquerda)."""
+        curr = node
+        while not curr.is_leaf:
+            self.metrics.count_read()
+            curr = curr.children[0]
+        return curr.keys[0]
+
+    def _fill_child(self, parent: BTreeNode, idx: int):
         """
-        Redistribui chaves do irmão esquerdo.
-        
-        Args:
-            parent: Nó pai
-            child_idx: Índice do filho
+        Preenche um filho com poucas chaves usando Borrow ou Merge.
         """
-        child = parent.children[child_idx]
-        left_sibling = parent.children[child_idx - 1]
+        # Tentar Borrow do irmão esquerdo
+        if idx > 0 and len(parent.children[idx - 1].keys) > self.min_keys:
+            self._borrow_from_prev(parent, idx)
         
-        # Puxar chave do pai para o filho
-        child.keys.insert(0, parent.keys[child_idx - 1])
+        # Tentar Borrow do irmão direito
+        elif idx < len(parent.children) - 1 and len(parent.children[idx + 1].keys) > self.min_keys:
+            self._borrow_from_next(parent, idx)
+            
+        # Fazer Merge
+        else:
+            if idx < len(parent.children) - 1:
+                self._merge_children(parent, idx)
+            else:
+                self._merge_children(parent, idx - 1)
+
+    def _borrow_from_prev(self, parent: BTreeNode, idx: int):
+        """Rotação à Direita."""
+        child = parent.children[idx]
+        sibling = parent.children[idx - 1]
         
-        # Subir última chave do irmão esquerdo para o pai
-        parent.keys[child_idx - 1] = left_sibling.keys.pop()
+        # Chave do pai desce
+        child.keys.insert(0, parent.keys[idx - 1])
+        if not child.is_leaf: 
+            child.children.insert(0, sibling.children.pop())
         
-        # Se não for folha, mover último filho também
-        if not child.is_leaf:
-            child.children.insert(0, left_sibling.children.pop())
+        # Chave do irmão sobe
+        parent.keys[idx - 1] = sibling.keys.pop()
         
-        self.tracer.emit(EventType.REDISTRIBUTE, left_sibling.id, {
-            'from_node': left_sibling.id,
-            'to_node': child.id,
-            'parent_id': parent.id,
-            'parent_key_index': child_idx - 1
+        # [I/O] 3 Escritas
+        self.metrics.count_write(); self.metrics.count_write(); self.metrics.count_write()
+        
+        self.tracer.emit(EventType.REDISTRIBUTE, sibling.id, {
+            'from_node': sibling.id, 'to_node': child.id, 'parent_id': parent.id
         })
-    
-    def _redistribute_from_right(self, parent: BTreeNode, child_idx: int):
-        """
-        Redistribui chaves do irmão direito.
+
+    def _borrow_from_next(self, parent: BTreeNode, idx: int):
+        """Rotação à Esquerda."""
+        child = parent.children[idx]
+        sibling = parent.children[idx + 1]
         
-        Args:
-            parent: Nó pai
-            child_idx: Índice do filho
-        """
-        child = parent.children[child_idx]
-        right_sibling = parent.children[child_idx + 1]
+        # Chave do pai desce
+        child.keys.append(parent.keys[idx])
+        if not child.is_leaf: 
+            child.children.append(sibling.children.pop(0))
         
-        # Puxar chave do pai para o filho
-        child.keys.append(parent.keys[child_idx])
+        # Chave do irmão sobe
+        parent.keys[idx] = sibling.keys.pop(0)
         
-        # Subir primeira chave do irmão direito para o pai
-        parent.keys[child_idx] = right_sibling.keys.pop(0)
+        # [I/O] 3 Escritas
+        self.metrics.count_write(); self.metrics.count_write(); self.metrics.count_write()
         
-        # Se não for folha, mover primeiro filho também
-        if not child.is_leaf:
-            child.children.append(right_sibling.children.pop(0))
-        
-        self.tracer.emit(EventType.REDISTRIBUTE, right_sibling.id, {
-            'from_node': right_sibling.id,
-            'to_node': child.id,
-            'parent_id': parent.id,
-            'parent_key_index': child_idx
+        self.tracer.emit(EventType.REDISTRIBUTE, sibling.id, {
+            'from_node': sibling.id, 'to_node': child.id, 'parent_id': parent.id
         })
-    
-    def _merge_with_left(self, parent: BTreeNode, child_idx: int):
+
+    def _merge_children(self, parent: BTreeNode, idx: int):
         """
-        Faz merge do filho com o irmão esquerdo.
-        
-        Args:
-            parent: Nó pai
-            child_idx: Índice do filho
+        Funde children[idx] e children[idx+1] usando a chave separadora do pai.
         """
-        child = parent.children[child_idx]
-        left_sibling = parent.children[child_idx - 1]
+        left = parent.children[idx]
+        right = parent.children[idx + 1]
+        separator = parent.keys.pop(idx)
         
-        # Puxar chave separadora do pai
-        separator = parent.keys.pop(child_idx - 1)
+        # Unir no nó da esquerda
+        left.keys.append(separator)
+        left.keys.extend(right.keys)
         
-        # Merge: left_sibling + separator + child
-        left_sibling.keys.append(separator)
-        left_sibling.keys.extend(child.keys)
+        if not left.is_leaf:
+            left.children.extend(right.children)
+            
+        # Remover nó da direita
+        parent.children.pop(idx + 1)
         
-        if not child.is_leaf:
-            left_sibling.children.extend(child.children)
+        # [I/O] 2 Escritas: Pai e Nó Fundido
+        self.metrics.count_write()
+        self.metrics.count_write()
         
-        # Remover child dos filhos do pai
-        parent.children.pop(child_idx)
-        
-        self.tracer.emit(EventType.MERGE, left_sibling.id, {
-            'left_id': left_sibling.id,
-            'right_id': child.id,
-            'parent_id': parent.id,
-            'separator_key': separator,
-            'merged_keys': left_sibling.keys.copy()
+        self.tracer.emit(EventType.MERGE, left.id, {
+            'left_id': left.id, 'right_id': right.id, 
+            'separator_key': separator, 'parent_id': parent.id
         })
-    
-    def _merge_with_right(self, parent: BTreeNode, child_idx: int):
-        """
-        Faz merge do filho com o irmão direito.
-        
-        Args:
-            parent: Nó pai
-            child_idx: Índice do filho
-        """
-        child = parent.children[child_idx]
-        right_sibling = parent.children[child_idx + 1]
-        
-        # Puxar chave separadora do pai
-        separator = parent.keys.pop(child_idx)
-        
-        # Merge: child + separator + right_sibling
-        child.keys.append(separator)
-        child.keys.extend(right_sibling.keys)
-        
-        if not child.is_leaf:
-            child.children.extend(right_sibling.children)
-        
-        # Remover right_sibling dos filhos do pai
-        parent.children.pop(child_idx + 1)
-        
-        self.tracer.emit(EventType.MERGE, child.id, {
-            'left_id': child.id,
-            'right_id': right_sibling.id,
-            'parent_id': parent.id,
-            'separator_key': separator,
-            'merged_keys': child.keys.copy()
-        })
-    
+
+    # =========================================================================
+    # HELPERS (Travessias e Informações)
+    # =========================================================================
+
     def to_levels(self) -> List[List[str]]:
-        """
-        Retorna representação da árvore por níveis (BFS).
-        
-        Returns:
-            Lista de níveis, cada nível é uma lista de strings representando nós
-        """
-        if self.root is None:
-            return []
-        
+        """Retorna estrutura em níveis para visualização."""
+        if self.root is None: return []
         levels = []
         queue = [(self.root, 0)]
-        
         while queue:
-            node, level = queue.pop(0)
-            
-            # Expandir lista de níveis se necessário
-            while len(levels) <= level:
-                levels.append([])
-            
-            # Adicionar representação do nó
-            node_str = f"[{','.join(map(str, node.keys))}]"
-            levels[level].append(node_str)
-            
-            # Adicionar filhos à fila
-            for child in node.children:
-                queue.append((child, level + 1))
-        
+            node, lvl = queue.pop(0)
+            while len(levels) <= lvl: levels.append([])
+            levels[lvl].append(f"[{','.join(map(str, node.keys))}]")
+            if not node.is_leaf:
+                for c in node.children: queue.append((c, lvl + 1))
         return levels
-    
+
     def get_all_nodes(self) -> List[BTreeNode]:
-        """
-        Retorna todos os nós da árvore (BFS).
-        
-        Returns:
-            Lista de todos os nós
-        """
-        if self.root is None:
-            return []
-        
+        """Retorna todos os nós (lista plana)."""
+        if self.root is None: return []
         nodes = []
         queue = [self.root]
-        
         while queue:
-            node = queue.pop(0)
-            nodes.append(node)
-            queue.extend(node.children)
-        
+            n = queue.pop(0)
+            nodes.append(n)
+            if not n.is_leaf: queue.extend(n.children)
         return nodes
+    
+    def get_height(self) -> int:
+        """Calcula altura da árvore."""
+        h = 0
+        node = self.root
+        while node:
+            h += 1
+            if node.is_leaf: break
+            node = node.children[0]
+        return h
+
+    def range_query(self, start_key: Any, end_key: Any) -> List[Any]:
+        """Busca por intervalo (In-Order Traversal)."""
+        result = []
+        self._in_order_range(self.root, start_key, end_key, result)
+        return result
+
+    def _in_order_range(self, node: BTreeNode, start: Any, end: Any, acc: List[Any]):
+        if not node: return
+        self.metrics.count_read()
+        i = 0
+        while i < len(node.keys):
+            if not node.is_leaf and node.keys[i] >= start:
+                self._in_order_range(node.children[i], start, end, acc)
+            
+            if start <= node.keys[i] <= end:
+                acc.append(node.keys[i])
+            
+            if node.keys[i] > end: return 
+            i += 1
+            
+        if not node.is_leaf:
+            self._in_order_range(node.children[i], start, end, acc)

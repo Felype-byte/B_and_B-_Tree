@@ -8,7 +8,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import Callable, Optional
 import os
-# from PIL import Image, ImageTk # Removed dependency on images for widgets
 
 class MainWindow:
     """
@@ -45,6 +44,10 @@ class MainWindow:
         self.on_random_remove: Optional[Callable] = None
         self.on_fanout_change: Optional[Callable] = None
         self.on_tree_type_change: Optional[Callable] = None
+        
+        # [NOVO] Callback para validar mudança de tipo de dado (pede reset)
+        self.on_data_type_change: Optional[Callable] = None
+        
         self.on_step_next: Optional[Callable] = None
         self.on_step_prev: Optional[Callable] = None
         self.on_reset: Optional[Callable] = None
@@ -155,12 +158,11 @@ class MainWindow:
         main_frame.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
         
         # === PAINEL DE CONTROLES (ESQUERDA) ===
-        # Width levemente maior para conforto
         left_container = ttk.Frame(main_frame, width=320)
         left_container.pack(side=tk.LEFT, fill=tk.Y)
         left_container.pack_propagate(False)
         
-        # Canvas para scroll dos controles (Fundo combina com bg_main)
+        # Canvas para scroll dos controles
         self.ctrl_canvas = tk.Canvas(
             left_container, 
             bg=self.colors["bg_main"], 
@@ -184,7 +186,7 @@ class MainWindow:
         ctrl_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.ctrl_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Padding interno (Cria o efeito de "Card" branco sobre fundo cinza)
+        # Padding interno (Card branco)
         pad_frame = ttk.Frame(ctrl_inner, style="Panel.TFrame")
         pad_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
@@ -194,32 +196,11 @@ class MainWindow:
             text="B-Tree Viz",
             style="Title.TLabel"
         )
-        title_label.pack(pady=(0, 25), anchor="w")
+        title_label.pack(pady=(0, 20), anchor="w")
         
-        # --- Seleção de tipo de árvore ---
-        tree_type_frame = ttk.LabelFrame(pad_frame, text=" Estrutura ", padding=15)
-        tree_type_frame.pack(fill=tk.X, pady=10)
-        
-        self.tree_type_var = tk.StringVar(value="btree")
-        ttk.Radiobutton(
-            tree_type_frame,
-            text="Árvore B",
-            variable=self.tree_type_var,
-            value="btree",
-            command=self._on_tree_type_changed
-        ).pack(anchor=tk.W, pady=2)
-        
-        ttk.Radiobutton(
-            tree_type_frame,
-            text="Árvore B+",
-            variable=self.tree_type_var,
-            value="bplustree",
-            command=self._on_tree_type_changed
-        ).pack(anchor=tk.W, pady=2)
-        
-        # --- Configuração de Fanout ---
+        # --- Configuração de Fanout (Comum a ambos) ---
         fanout_frame = ttk.LabelFrame(pad_frame, text=" Grau (Ordem) ", padding=15)
-        fanout_frame.pack(fill=tk.X, pady=10)
+        fanout_frame.pack(fill=tk.X, pady=(0, 10))
         
         self.fanout_var = tk.IntVar(value=3)
         
@@ -244,71 +225,122 @@ class MainWindow:
             text="Aplicar Mudança",
             command=self._on_fanout_changed
         ).pack(fill=tk.X)
-        
-        # --- Operações ---
-        ops_frame = ttk.LabelFrame(pad_frame, text=" Operações ", padding=15)
-        ops_frame.pack(fill=tk.X, pady=10)
-        
-        # Key Type hidden mostly, assume numeric for simplicity or keep valid
-        # Keeping it internal if needed, but UI cleaner without it if user uses nums usually.
-        # Adding simple type selection if robust.
-        self.key_type_var = tk.StringVar(value="numeric")
 
-        ttk.Label(ops_frame, text="Valor:").pack(anchor=tk.W)
-        self.key_entry = ttk.Entry(ops_frame, font=("Segoe UI", 11))
-        self.key_entry.pack(fill=tk.X, pady=(5, 15))
+        # --- Seleção de Estrutura (Comum a ambos) ---
+        tree_type_frame = ttk.LabelFrame(pad_frame, text=" Estrutura ", padding=15)
+        tree_type_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Grid layout for buttons
-        btn_grid = ttk.Frame(ops_frame, style="Panel.TFrame")
-        btn_grid.pack(fill=tk.X)
+        self.tree_type_var = tk.StringVar(value="btree")
+        ttk.Radiobutton(
+            tree_type_frame, text="Árvore B", variable=self.tree_type_var, value="btree",
+            command=self._on_tree_type_changed
+        ).pack(anchor=tk.W, pady=2)
         
-        ttk.Button(
-            btn_grid,
-            text="Inserir",
-            command=self._on_insert_clicked
-        ).pack(fill=tk.X, pady=2)
+        ttk.Radiobutton(
+            tree_type_frame, text="Árvore B+", variable=self.tree_type_var, value="bplustree",
+            command=self._on_tree_type_changed
+        ).pack(anchor=tk.W, pady=2)
+
+        # --- SELEÇÃO DE TIPO DE DADO (MENU ADAPTATIVO) ---
+        dtype_frame = ttk.LabelFrame(pad_frame, text=" Tipo de Dado ", padding=15)
+        dtype_frame.pack(fill=tk.X, pady=10)
         
-        ttk.Button(
-            btn_grid,
-            text="Buscar",
-            command=self._on_search_clicked
-        ).pack(fill=tk.X, pady=2)
+        self.data_type_var = tk.StringVar(value="numeric")
+        self.last_data_type = "numeric"  # [NOVO] Guarda o estado anterior para reverter se cancelar
         
-        self.remove_btn = ttk.Button(
-            btn_grid,
-            text="Remover",
-            command=self._on_remove_clicked
-        )
-        self.remove_btn.pack(fill=tk.X, pady=2)
+        ttk.Radiobutton(
+            dtype_frame, text="Numérico", variable=self.data_type_var, value="numeric",
+            command=self._toggle_data_mode
+        ).pack(side=tk.LEFT, padx=(0, 15))
         
-        # --- Aleatório ---
-        random_frame = ttk.LabelFrame(pad_frame, text=" Aleatório ", padding=15)
-        random_frame.pack(fill=tk.X, pady=10)
+        ttk.Radiobutton(
+            dtype_frame, text="Texto (String)", variable=self.data_type_var, value="string",
+            command=self._toggle_data_mode
+        ).pack(side=tk.LEFT)
+
+        # ==========================================================
+        # CONTAINER NUMÉRICO
+        # ==========================================================
+        self.numeric_container = ttk.Frame(pad_frame, style="Panel.TFrame")
+        
+        # Operações Numéricas
+        num_ops_frame = ttk.LabelFrame(self.numeric_container, text=" Operações (Num) ", padding=15)
+        num_ops_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(num_ops_frame, text="Valor Inteiro:").pack(anchor=tk.W)
+        self.num_entry = ttk.Entry(num_ops_frame, font=("Segoe UI", 11))
+        self.num_entry.pack(fill=tk.X, pady=(5, 15))
+        
+        # Botões Numéricos
+        self._create_ops_buttons(num_ops_frame)
+        
+        # Aleatório Numérico
+        num_random_frame = ttk.LabelFrame(self.numeric_container, text=" Aleatório (Num) ", padding=15)
+        num_random_frame.pack(fill=tk.X, pady=10)
         
         # Inputs Row
-        r_inputs = ttk.Frame(random_frame, style="Panel.TFrame")
-        r_inputs.pack(fill=tk.X, pady=(0, 10))
+        nr_inputs = ttk.Frame(num_random_frame, style="Panel.TFrame")
+        nr_inputs.pack(fill=tk.X, pady=(0, 10))
         
-        ttk.Label(r_inputs, text="Qtd:").pack(side=tk.LEFT)
-        self.random_count_entry = ttk.Entry(r_inputs, width=5)
+        ttk.Label(nr_inputs, text="Qtd:").pack(side=tk.LEFT)
+        self.random_count_entry = ttk.Entry(nr_inputs, width=5)
         self.random_count_entry.insert(0, "10")
         self.random_count_entry.pack(side=tk.LEFT, padx=5)
         
-        ttk.Label(r_inputs, text="Max:").pack(side=tk.LEFT, padx=(5,0))
-        self.random_max_entry = ttk.Entry(r_inputs, width=6)
-        self.random_max_entry.insert(0, "100") # Simplified max default
+        ttk.Label(nr_inputs, text="Max:").pack(side=tk.LEFT, padx=(5,0))
+        self.random_max_entry = ttk.Entry(nr_inputs, width=6)
+        self.random_max_entry.insert(0, "100") 
         self.random_max_entry.pack(side=tk.LEFT, padx=5)
         
-        # Inputs hidden for simplicity (Min usually 1)
-        self.random_min_entry = ttk.Entry(r_inputs, width=0)
+        # Min oculto (default 1)
+        self.random_min_entry = ttk.Entry(nr_inputs, width=0)
         self.random_min_entry.insert(0, "1")
         
         ttk.Button(
-            random_frame,
-            text="Gerar",
+            num_random_frame, text="Gerar Números",
             command=self._on_random_insert_clicked
         ).pack(fill=tk.X)
 
+        # ==========================================================
+        # CONTAINER STRING
+        # ==========================================================
+        self.string_container = ttk.Frame(pad_frame, style="Panel.TFrame")
+        
+        # Operações String
+        str_ops_frame = ttk.LabelFrame(self.string_container, text=" Operações (Texto) ", padding=15)
+        str_ops_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(str_ops_frame, text="Texto:").pack(anchor=tk.W)
+        self.str_entry = ttk.Entry(str_ops_frame, font=("Segoe UI", 11))
+        self.str_entry.pack(fill=tk.X, pady=(5, 15))
+        
+        # Botões String
+        self._create_ops_buttons(str_ops_frame)
+        
+        # Aleatório String
+        str_random_frame = ttk.LabelFrame(self.string_container, text=" Aleatório (Texto) ", padding=15)
+        str_random_frame.pack(fill=tk.X, pady=10)
+        
+        sr_inputs = ttk.Frame(str_random_frame, style="Panel.TFrame")
+        sr_inputs.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(sr_inputs, text="Qtd:").pack(side=tk.LEFT)
+        self.str_random_count_entry = ttk.Entry(sr_inputs, width=5)
+        self.str_random_count_entry.insert(0, "10")
+        self.str_random_count_entry.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(sr_inputs, text="Tam:").pack(side=tk.LEFT, padx=(5,0))
+        self.str_random_len_entry = ttk.Entry(sr_inputs, width=5)
+        self.str_random_len_entry.insert(0, "3") # Default 3 letras
+        self.str_random_len_entry.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(
+            str_random_frame, text="Gerar Strings",
+            command=self._on_random_insert_clicked
+        ).pack(fill=tk.X)
+
+        # Inicializa mostrando o numérico
+        self.numeric_container.pack(fill=tk.BOTH, expand=True)
         
         # === FIM DOS CONTROLES ===
         
@@ -334,66 +366,106 @@ class MainWindow:
         
         self.canvas.configure(scrollregion=(0, 0, 2000, 2000))
     
+    def _create_ops_buttons(self, parent):
+        """Helper para criar os botões padrão de Inserir/Buscar/Remover."""
+        btn_grid = ttk.Frame(parent, style="Panel.TFrame")
+        btn_grid.pack(fill=tk.X)
+        
+        ttk.Button(btn_grid, text="Inserir", command=self._on_insert_clicked).pack(fill=tk.X, pady=2)
+        ttk.Button(btn_grid, text="Buscar", command=self._on_search_clicked).pack(fill=tk.X, pady=2)
+        ttk.Button(btn_grid, text="Remover", command=self._on_remove_clicked).pack(fill=tk.X, pady=2)
+
+    def _toggle_data_mode(self):
+        """
+        Alterna a visibilidade dos containers.
+        [MODIFICADO] Solicita confirmação ao controlador antes de mudar.
+        """
+        new_mode = self.data_type_var.get()
+        
+        # Se não mudou nada, ignora
+        if new_mode == self.last_data_type:
+            return
+
+        # [NOVO] Verifica com o controlador se pode trocar (exibe confirmação de reset)
+        if self.on_data_type_change:
+            should_proceed = self.on_data_type_change(new_mode)
+            if not should_proceed:
+                # Se o usuário cancelar (clicar em 'No'), volta o botão para o estado anterior
+                self.data_type_var.set(self.last_data_type)
+                return
+
+        # Se confirmou, atualiza o estado e troca os painéis
+        self.last_data_type = new_mode
+        
+        if new_mode == "numeric":
+            self.string_container.pack_forget()
+            self.numeric_container.pack(fill=tk.BOTH, expand=True)
+        else:
+            self.numeric_container.pack_forget()
+            self.string_container.pack(fill=tk.BOTH, expand=True)
+
     # === MÉTODOS DE CALLBACK INTERNOS ===
     
     def _update_fanout_label(self, label: ttk.Label, value):
-        """Atualiza o label do fanout."""
         n = int(float(value))
         label.config(text=f"n = {n}")
     
     def _on_tree_type_changed(self):
-        """Callback quando o tipo de árvore é alterado."""
         if self.on_tree_type_change:
             self.on_tree_type_change(self.tree_type_var.get())
     
     def _on_fanout_changed(self):
-        """Callback quando o fanout é alterado."""
         if self.on_fanout_change:
             self.on_fanout_change(self.fanout_var.get())
     
     def _on_insert_clicked(self):
-        """Callback do botão Inserir."""
         key = self._parse_key()
         if key is not None and self.on_insert:
             self.on_insert(key)
     
     def _on_search_clicked(self):
-        """Callback do botão Buscar."""
         key = self._parse_key()
         if key is not None and self.on_search:
             self.on_search(key)
     
     def _on_remove_clicked(self):
-        """Callback do botão Remover."""
         key = self._parse_key()
         if key is not None and self.on_remove:
             self.on_remove(key)
     
     def _on_random_insert_clicked(self):
-        """Callback do botão Inserir Aleatório."""
+        """Callback adaptativo para Numérico ou String."""
         try:
-            count = int(self.random_count_entry.get())
-            min_val = int(self.random_min_entry.get())
-            max_val = int(self.random_max_entry.get())
+            mode = self.data_type_var.get()
             
-            if count <= 0:
-                messagebox.showerror("Erro", "Quantidade deve ser > 0")
-                return
+            if mode == "numeric":
+                count = int(self.random_count_entry.get())
+                min_val = int(self.random_min_entry.get())
+                max_val = int(self.random_max_entry.get())
+                
+                if count <= 0: raise ValueError("Quantidade deve ser > 0")
+                if min_val >= max_val: raise ValueError("Min deve ser < Max")
+                
+                if self.on_random_insert:
+                    self.on_random_insert(count, min_val, max_val)
             
-            if min_val >= max_val:
-                messagebox.showerror("Erro", "Min deve ser < Max")
-                return
-            
-            if self.on_random_insert:
-                self.on_random_insert(count, min_val, max_val)
+            else: # string
+                count = int(self.str_random_count_entry.get())
+                length = int(self.str_random_len_entry.get())
+                
+                if count <= 0: raise ValueError("Quantidade deve ser > 0")
+                if length <= 0: raise ValueError("Tamanho deve ser > 0")
+                if length > 10: raise ValueError("Tamanho máx sugerido: 10")
+
+                if self.on_random_insert:
+                    self.on_random_insert(count, length, 0) # 0 é dummy para max_val
         
         except ValueError as e:
             messagebox.showerror("Erro", f"Valores inválidos: {e}")
     
     def _on_random_remove_clicked(self):
-        """Callback do botão Remover Aleatório. (Simplificado/Oculto na UI principal)"""
         if self.on_random_remove:
-            self.on_random_remove(1) # Default 
+            self.on_random_remove(1) 
     
     def _on_next_clicked(self):
         if self.on_step_next: self.on_step_next()
@@ -408,20 +480,25 @@ class MainWindow:
         if self.on_play: self.on_play()
     
     def _parse_key(self) -> Optional[any]:
-        """Faz parse da chave digitada."""
-        key_str = self.key_entry.get().strip()
-        if not key_str:
-            messagebox.showwarning("Aviso", "Digite uma chave")
-            return None
+        """Faz parse da chave dependendo do modo ativo."""
+        mode = self.data_type_var.get()
         
-        if self.key_type_var.get() == "numeric":
+        if mode == "numeric":
+            key_str = self.num_entry.get().strip()
+            if not key_str:
+                messagebox.showwarning("Aviso", "Digite um número")
+                return None
             try:
                 return int(key_str)
             except ValueError:
                 messagebox.showerror("Erro", "Chave deve ser um número inteiro")
                 return None
-        else:
-            return key_str
+        else: # string
+            key_str = self.str_entry.get().strip()
+            if not key_str:
+                messagebox.showwarning("Aviso", "Digite um texto")
+                return None
+            return key_str[:15] # Limite de segurança visual
     
     # === MÉTODOS PÚBLICOS PARA ATUALIZAR UI ===
     
