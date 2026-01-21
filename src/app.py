@@ -110,9 +110,8 @@ class TreeVisualizerApp:
         message = highlight.get('message', '')
         self.window.update_event_message(message)
     
-    # =========================================================================
+
     # HANDLERS DE CONFIGURAÇÃO (Mudança de Tipo, Fanout, Reset)
-    # =========================================================================
 
     def handle_data_type_change(self, new_type: str) -> bool:
         """
@@ -161,9 +160,9 @@ class TreeVisualizerApp:
             
             self.window.show_message("Reiniciado", f"Nova {tree_name} criada", "info")
 
-    # =========================================================================
+
     # HANDLERS DE OPERAÇÕES (Inserir, Buscar, Remover)
-    # =========================================================================
+   
     
     def handle_insert(self, key: Any):
         """Inserção manual de um único valor."""
@@ -171,13 +170,13 @@ class TreeVisualizerApp:
             self.tracer.clear()
             self.metrics.reset_accesses()
             
-            # --- PROTEÇÃO 1: Verifica cache local ---
+            # Verifica cache local
             if key in self.existing_keys:
                 self.window.show_message("Aviso", f"Chave '{key}' já existe (Cache).", "warning")
                 return
             
-            # --- PROTEÇÃO 2: Verifica árvore real (Safety Check) ---
-            # Impede o erro de validação 'CKC' ou duplicata interna
+            # Verifica árvore real (Safety Check)
+           
             if self.tree.search(key)['found']:
                 self.existing_keys.add(key) # Sincroniza se estava faltando
                 self.window.show_message("Aviso", f"Chave '{key}' já existe na árvore.", "warning")
@@ -313,7 +312,7 @@ class TreeVisualizerApp:
             mode = self.window.data_type_var.get()
             keys_to_insert = []
             
-            # --- MODO NUMÉRICO ---
+            # Modo numerico
             if mode == "numeric":
                 min_val = param1
                 max_val = param2
@@ -328,7 +327,7 @@ class TreeVisualizerApp:
                     if len(keys_to_insert) >= count: 
                         break
             
-            # --- MODO STRING ---
+            # Modo string
             else:
                 length = param1
                 
@@ -347,7 +346,7 @@ class TreeVisualizerApp:
                 while len(candidates) < count and attempts < max_attempts:
                     s = ''.join(random.choices(string.ascii_uppercase, k=length))
                     
-                    # Verifica unicidade local (lote) e global (árvore)
+                    # Verifica unicidade local e global
                     if s not in candidates:
                         if not self.tree.search(s)['found']: 
                             candidates.add(s)
@@ -362,7 +361,7 @@ class TreeVisualizerApp:
             if not keys_to_insert:
                 return
 
-            # --- INSERÇÃO EM LOTE ---
+            # insercao em lote
             # batch_insert agora usa o self.tree.insert, que popula self.metrics
             elapsed_ms, accesses = batch_insert(self.tree, keys_to_insert)
             
@@ -373,7 +372,7 @@ class TreeVisualizerApp:
                 messagebox.showerror("Erro Crítico", f"Erro após inserção em lote:\n{e}")
             
             self._render_tree()
-            self.controller.load_events([]) # Limpa eventos (muitos eventos travam a UI)
+            self.controller.load_events([]) # Limpa eventos
             self._update_playback_controls()
             
             type_lbl = "números" if mode == "numeric" else "strings"
@@ -426,10 +425,9 @@ class TreeVisualizerApp:
         except Exception as e:
             messagebox.showerror("Erro", f"Erro remover: {e}")
     
-    # =========================================================================
+   
     # HANDLERS DE REPRODUÇÃO (Step-by-Step)
-    # =========================================================================
-    
+
     def handle_step_next(self):
         """Avança um passo na visualização."""
         if self.controller.step_next():

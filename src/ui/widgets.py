@@ -19,14 +19,14 @@ class MainWindow:
         self.root.title("Visualizador de Árvores B e B+")
         self.root.geometry("1200x800")
         
-        # --- PALETA DE CORES GLOBAL (PADRÃO BLUE-GREY/INDIGO) ---
+        #palleta de cores
         self.colors = {
-            "bg_main":       "#eceff1",  # Fundo geral (Blue Grey 50)
+            "bg_main":       "#eceff1",  # Fundo geral (Blue Grey)
             "bg_panel":      "#ffffff",  # Fundo dos painéis (White)
-            "fg_text":       "#37474f",  # Texto principal (Blue Grey 800)
-            "accent":        "#5c6bc0",  # Cor de destaque/Botões (Indigo 400)
-            "accent_hover":  "#3949ab",  # Hover dos botões (Indigo 600)
-            "border":        "#cfd8dc",  # Bordas sutis (Blue Grey 100)
+            "fg_text":       "#37474f",  # Texto principal (Blue Grey)
+            "accent":        "#5c6bc0",  # Cor de destaque/Botões (Indigo)
+            "accent_hover":  "#3949ab",  # Hover dos botões (Indigo)
+            "border":        "#cfd8dc",  # Bordas sutis (Blue Grey)
             "input_bg":      "#fafafa",  # Fundo dos inputs
             "scroll_bg":     "#cfd8dc",  # Fundo do scroll
             "scroll_fg":     "#78909c",  # Barra do scroll
@@ -45,7 +45,7 @@ class MainWindow:
         self.on_fanout_change: Optional[Callable] = None
         self.on_tree_type_change: Optional[Callable] = None
         
-        # [NOVO] Callback para validar mudança de tipo de dado (pede reset)
+        # Callback para validar mudança de tipo de dado
         self.on_data_type_change: Optional[Callable] = None
         
         self.on_step_next: Optional[Callable] = None
@@ -85,14 +85,14 @@ class MainWindow:
         
         # Labels (Textos)
         style.configure("TLabel", background=c["bg_panel"], foreground=c["fg_text"])
-        # Título com fundo transparente (herda do pai) ou ajustado
+        # Título com fundo transparente 
         style.configure("Title.TLabel", 
             background=c["bg_panel"], 
             foreground=c["accent"], 
             font=("Segoe UI", 18, "bold")
         )
         
-        # Botões (Flat Modern Indigo)
+        # Botões
         style.configure("TButton", 
             background=c["accent"], 
             foreground="white", 
@@ -113,7 +113,7 @@ class MainWindow:
             foreground=[('active', c["accent"])]
         )
         
-        # Entry (Caixas de texto - Otimizadas)
+        # Entry (Caixas de texto)
         style.configure("TEntry", 
             fieldbackground=c["input_bg"], 
             foreground=c["fg_text"], 
@@ -130,7 +130,7 @@ class MainWindow:
             sliderthickness=15
         )
         
-        # Scrollbar (Barras de rolagem - Harmônicas)
+        # Scrollbar (Barras de rolagem)
         style.configure("Vertical.TScrollbar", 
             background=c["scroll_fg"], 
             troughcolor=c["bg_main"], 
@@ -157,7 +157,7 @@ class MainWindow:
         main_frame = ttk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
         
-        # === PAINEL DE CONTROLES (ESQUERDA) ===
+        #PAINEL DE CONTROLES
         left_container = ttk.Frame(main_frame, width=320)
         left_container.pack(side=tk.LEFT, fill=tk.Y)
         left_container.pack_propagate(False)
@@ -198,7 +198,7 @@ class MainWindow:
         )
         title_label.pack(pady=(0, 20), anchor="w")
         
-        # --- Configuração de Fanout (Comum a ambos) ---
+        #Configuração de Fanout
         fanout_frame = ttk.LabelFrame(pad_frame, text=" Grau (Ordem) ", padding=15)
         fanout_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -226,7 +226,7 @@ class MainWindow:
             command=self._on_fanout_changed
         ).pack(fill=tk.X)
 
-        # --- Seleção de Estrutura (Comum a ambos) ---
+        #Seleção de Estrutura
         tree_type_frame = ttk.LabelFrame(pad_frame, text=" Estrutura ", padding=15)
         tree_type_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -241,12 +241,12 @@ class MainWindow:
             command=self._on_tree_type_changed
         ).pack(anchor=tk.W, pady=2)
 
-        # --- SELEÇÃO DE TIPO DE DADO (MENU ADAPTATIVO) ---
+        # Menu adaptativo
         dtype_frame = ttk.LabelFrame(pad_frame, text=" Tipo de Dado ", padding=15)
         dtype_frame.pack(fill=tk.X, pady=10)
         
         self.data_type_var = tk.StringVar(value="numeric")
-        self.last_data_type = "numeric"  # [NOVO] Guarda o estado anterior para reverter se cancelar
+        self.last_data_type = "numeric"  # Guarda o estado anterior para reverter se cancelar
         
         ttk.Radiobutton(
             dtype_frame, text="Numérico", variable=self.data_type_var, value="numeric",
@@ -258,9 +258,9 @@ class MainWindow:
             command=self._toggle_data_mode
         ).pack(side=tk.LEFT)
 
-        # ==========================================================
-        # CONTAINER NUMÉRICO
-        # ==========================================================
+
+        # Container numerico
+
         self.numeric_container = ttk.Frame(pad_frame, style="Panel.TFrame")
         
         # Operações Numéricas
@@ -307,9 +307,9 @@ class MainWindow:
             command=self._on_random_remove_clicked
         ).pack(fill=tk.X)
 
-        # ==========================================================
-        # CONTAINER STRING
-        # ==========================================================
+
+        # Container String
+
         self.string_container = ttk.Frame(pad_frame, style="Panel.TFrame")
         
         # Operações String
@@ -353,20 +353,20 @@ class MainWindow:
         # Inicializa mostrando o numérico
         self.numeric_container.pack(fill=tk.BOTH, expand=True)
         
-        # === FIM DOS CONTROLES ===
+        # Fim dos controllers
         
-        # === CANVAS (DIREITA) ===
+        # Canvas
         canvas_container = ttk.Frame(main_frame)
         canvas_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # --- BARRA DE STATUS / PLAYBACK (Topo do Canvas) ---
+        # Status / Topo do Canvas 
         playback_frame = ttk.Frame(canvas_container, style="Panel.TFrame", padding=10)
         playback_frame.pack(side=tk.TOP, fill=tk.X)
         
         # Grid para alinhar controles
         playback_frame.columnconfigure(1, weight=1)
         
-        # Botões de Controle REMOVIDOS A PEDIDO
+        # Botões de Controle
         # pb_btns = ttk.Frame(playback_frame, style="Panel.TFrame")
         # pb_btns.pack(side=tk.LEFT)
 
@@ -381,7 +381,7 @@ class MainWindow:
         self.lbl_progress = ttk.Label(info_frame, text="", font=("Segoe UI", 9))
         self.lbl_progress.pack(anchor="w")
         
-        # Métricas (Direita)
+        # Métricas 
         stats_frame = ttk.Frame(playback_frame, style="Panel.TFrame")
         stats_frame.pack(side=tk.RIGHT)
         
@@ -390,7 +390,7 @@ class MainWindow:
         self.lbl_time = ttk.Label(stats_frame, text="0 ms", font=("Consolas", 10))
         self.lbl_time.pack(anchor="e")
 
-        # Canvas clean com cor ajustada ao tema
+        # Canvas clean 
         self.canvas = tk.Canvas(
             canvas_container,
             bg=self.colors["canvas_bg"], 
@@ -420,7 +420,7 @@ class MainWindow:
     def _toggle_data_mode(self):
         """
         Alterna a visibilidade dos containers.
-        [MODIFICADO] Solicita confirmação ao controlador antes de mudar.
+        Solicita confirmação ao controlador antes de mudar.
         """
         new_mode = self.data_type_var.get()
         
@@ -428,7 +428,7 @@ class MainWindow:
         if new_mode == self.last_data_type:
             return
 
-        # [NOVO] Verifica com o controlador se pode trocar (exibe confirmação de reset)
+        # Verifica com o controlador se pode trocar 
         if self.on_data_type_change:
             should_proceed = self.on_data_type_change(new_mode)
             if not should_proceed:
@@ -446,7 +446,7 @@ class MainWindow:
             self.numeric_container.pack_forget()
             self.string_container.pack(fill=tk.BOTH, expand=True)
 
-    # === MÉTODOS DE CALLBACK INTERNOS ===
+    # Metodos de callback
     
     def _update_fanout_label(self, label: ttk.Label, value):
         n = int(float(value))
@@ -563,7 +563,7 @@ class MainWindow:
                 return None
             return key_str[:15] # Limite de segurança visual
     
-    # === MÉTODOS PÚBLICOS PARA ATUALIZAR UI ===
+    #atualizar ui
     
     def update_metrics(self, node_accesses: int, batch_time_ms: Optional[float]):
         io_text = f"Reads: {node_accesses}" 

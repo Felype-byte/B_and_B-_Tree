@@ -9,7 +9,7 @@ from tkinter import ttk, messagebox
 from typing import Callable, Optional, Dict, Tuple, List, Any
 import os
 
-# --- FUNÇÃO DE LAYOUT OTIMIZADA ---
+# Funcao de layout
 def layout_tree(root_node, get_children_func) -> Tuple[Dict[int, Tuple[int, int]], int, int]:
     """
     Calcula posições (x, y) com espaçamento dinâmico baseado no conteúdo.
@@ -193,14 +193,13 @@ class TreeCanvas:
         cp1 = (x1, start_y + offset_y)
         cp2 = (x2, end_y - offset_y)
         
-        # CORREÇÃO: Repetimos (x1, start_y) e (x2, end_y) duas vezes na lista de pontos.
-        # Isso força a Spline do Tkinter a passar EXATAMENTE por esses pontos (ancoragem),
-        # resolvendo o problema visual de linhas desconectadas em árvores largas.
+        # Repetimos (x1, start_y) e (x2, end_y) duas vezes na lista de pontos.
+        # Isso força a Spline do Tkinter a passar EXATAMENTE por esses pontos (ancoragem)
         self.canvas.create_line(
-            x1, start_y, x1, start_y,  # <--- Âncora Inicial
+            x1, start_y, x1, start_y,  #  Âncora Inicial
             cp1[0], cp1[1], 
             cp2[0], cp2[1], 
-            x2, end_y, x2, end_y,      # <--- Âncora Final
+            x2, end_y, x2, end_y,      #  Âncora Final
             fill=color,
             width=width,
             smooth=True,

@@ -95,9 +95,9 @@ class BPlusTree:
         # Ponteiro para o início da lista encadeada (Range Queries)
         self.first_leaf = self.root
     
-    # =========================================================================
-    # SEARCH (Busca)
-    # =========================================================================
+ 
+    #Busca
+
     
     def search(self, key: Any) -> dict:
         """
@@ -140,9 +140,9 @@ class BPlusTree:
                 
         return {'found': False, 'node_id': -1, 'index': -1, 'path': path}
 
-    # =========================================================================
-    # INSERT (Inserção Bottom-Up)
-    # =========================================================================
+   
+#Inserção 
+  
 
     def insert(self, key: Any) -> bool:
         """
@@ -318,9 +318,7 @@ class BPlusTree:
         if len(parent.keys) > self.max_keys:
             self._split_internal(parent)
 
-    # =========================================================================
-    # DELETE (Remoção com Tratamento de Underflow Completo)
-    # =========================================================================
+    #Remoção com Underflow
 
     def delete(self, key: Any) -> bool:
         """
@@ -520,9 +518,6 @@ class BPlusTree:
         # Atenção: Chamada recursiva para tratar underflow no pai
         self._delete_entry(parent, separator_key, pointer=right_node)
 
-    # =========================================================================
-    # HELPERS
-    # =========================================================================
 
     def _search_silent(self, key: Any) -> dict:
         """Busca sem emitir eventos (usado internamente)."""

@@ -74,9 +74,9 @@ def choose_existing_keys(existing_keys: Set[Any], count: int) -> List[Any]:
     
     return random.sample(list(existing_keys), k)
 
-# =============================================================================
+
 # EXECUTORES DE LOTE (BATCH)
-# =============================================================================
+
 
 def batch_insert(tree, keys: List[Any]) -> Tuple[float, int]:
     """

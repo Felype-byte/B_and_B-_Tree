@@ -169,7 +169,7 @@ def validate_bplustree(tree) -> bool:
     if leaf_depths and len(set(leaf_depths)) > 1:
         raise ValidationError(f"Desbalanceamento: Folhas em níveis {set(leaf_depths)}")
     
-    # --- VALIDAÇÃO DA LISTA ENCADEADA (Sequence Set) ---
+
     # Verifica se tree.first_leaf percorre exatamente os mesmos nós 
     # que encontramos via DFS, na mesma ordem.
     

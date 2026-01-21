@@ -2,11 +2,8 @@
 Módulo: core.btree
 Implementação Robusta de Árvore B (Standard B-Tree).
 
-Baseado nos algoritmos descritos em:
-Cormen, Leiserson, Rivest, Stein (CLRS) - "Introduction to Algorithms".
-
 Características Principais:
----------------------------
+
 1.  **Armazenamento Misto:** Diferente da B+, na B-Tree as chaves e dados residem em qualquer nó 
     (interno ou folha). Não há duplicação de chaves.
 
@@ -95,9 +92,9 @@ class BTree:
         self.tracer = tracer or Tracer()
         self.metrics = metrics or Metrics()
     
-    # =========================================================================
-    # SEARCH (Busca)
-    # =========================================================================
+
+    #Busca
+  
     
     def search(self, key: Any) -> dict:
         """
@@ -146,9 +143,9 @@ class BTree:
         self.tracer.emit(EventType.DESCEND, node.id, {'child_index': i, 'target_key': key})
         return self._search_recursive(node.children[i], key, path)
 
-    # =========================================================================
-    # INSERT (Inserção Bottom-Up)
-    # =========================================================================
+
+    #Inserção Bottom-Up
+
 
     def insert(self, key: Any) -> bool:
         """
@@ -226,7 +223,6 @@ class BTree:
             # Chamada Recursiva
             self._insert_recursive(node.children[i], key)
             
-            # --- PÓS-RECURSÃO (BACKTRACK) ---
             # Verificar se o filho onde inserimos acabou estourando
             if len(node.children[i].keys) > self.max_keys:
                 self._split_child(node, i)
@@ -277,9 +273,9 @@ class BTree:
             'right_keys': new_node.keys.copy()
         })
 
-    # =========================================================================
-    # DELETE (Remoção Proativa / Top-Down)
-    # =========================================================================
+
+    #Remoção Top-Down
+
 
     def delete(self, key: Any) -> bool:
         """
@@ -339,7 +335,7 @@ class BTree:
         while idx < len(node.keys) and key > node.keys[idx]:
             idx += 1
         
-        # --- A CHAVE ESTÁ NESTE NÓ ---
+        # No chave
         if idx < len(node.keys) and key == node.keys[idx]:
             self.tracer.emit(EventType.DELETE_FOUND, node.id, {'key': key, 'key_index': idx})
             
@@ -522,9 +518,6 @@ class BTree:
             'separator_key': separator, 'parent_id': parent.id
         })
 
-    # =========================================================================
-    # HELPERS (Travessias e Informações)
-    # =========================================================================
 
     def to_levels(self) -> List[List[str]]:
         """Retorna estrutura em níveis para visualização."""
